@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
@@ -61,9 +62,15 @@ func (c *AuthChecker) Check() output.TestResult {
 		Duration: time.Since(startTime),
 	}
 
-	// Create HTTP client
+	// Create HTTP client with custom transport for insecure TLS
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: c.Config.Insecure,
+		},
+	}
 	client := &http.Client{
-		Timeout: time.Duration(c.Config.Timeout) * time.Second,
+		Timeout:   time.Duration(c.Config.Timeout) * time.Second,
+		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if !c.Config.FollowRedirect {
 				return http.ErrUseLastResponse
@@ -327,32 +334,50 @@ func (c *AuthChecker) addSigV2Auth(req *http.Request) error {
 func (c *AuthChecker) createSigV2CanonicalString(req *http.Request) string {
 	var buf bytes.Buffer
 
+	// HTTP Verb
 	buf.WriteString(req.Method)
 	buf.WriteString("\n")
-	buf.WriteString(req.URL.Path)
-	if req.URL.Path == "" {
+
+	// Content-MD5 (empty if not present)
+	buf.WriteString("\n")
+
+	// Content-Type (empty if not present)
+	buf.WriteString("\n")
+
+	// Date
+	buf.WriteString(req.Header.Get("Date"))
+	buf.WriteString("\n")
+
+	// CanonicalizedResource
+	// For SigV2, the resource path should include the bucket
+	canonicalizedResource := c.getCanonicalizedResource(req)
+	buf.WriteString(canonicalizedResource)
+
+	return buf.String()
+}
+
+// getCanonicalizedResource returns the canonicalized resource for SigV2
+func (c *AuthChecker) getCanonicalizedResource(req *http.Request) string {
+	var buf bytes.Buffer
+
+	// For path-style addressing, the path already includes /bucket
+	// For virtual-hosted addressing, we need to prepend /bucket
+	if c.PathStyle {
+		buf.WriteString(req.URL.Path)
+		if req.URL.Path == "" {
+			buf.WriteString("/")
+		}
+	} else {
+		// Virtual-hosted style: prepend /bucket to the path
 		buf.WriteString("/")
-	}
-	buf.WriteString("\n")
-
-	// Query string (will be added separately for SigV2)
-	buf.WriteString("\n")
-
-	// Headers
-	canonicalHeaders := []string{"host", "date"}
-	for _, header := range canonicalHeaders {
-		if values := req.Header.Values(header); len(values) > 0 {
-			buf.WriteString(strings.ToLower(header))
-			buf.WriteString(":")
-			for i, val := range values {
-				buf.WriteString(strings.TrimSpace(val))
-				if i < len(values)-1 {
-					buf.WriteString(",")
-				}
-			}
-			buf.WriteString("\n")
+		buf.WriteString(c.Bucket)
+		if req.URL.Path != "" && req.URL.Path != "/" {
+			buf.WriteString(req.URL.Path)
 		}
 	}
+
+	// Add sub-resources if any
+	// Note: For HEAD request to check bucket existence, we typically don't have sub-resources
 
 	return buf.String()
 }
