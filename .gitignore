@@ -4,8 +4,8 @@
 *.dll
 *.so
 *.dylib
-s3tester
-s3tester-*
+/s3tester
+/s3tester-*
 
 # Test binary, built with `go test -c`
 *.test
