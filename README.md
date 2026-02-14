@@ -34,6 +34,7 @@ A cross-platform CLI tool built in Go to test S3-compatible storage providers (A
 - **Verbose logging**: Detailed debugging information
 - **JSON output**: Optional machine-readable output format
 - **Remediation suggestions**: Automatic fix suggestions for failed tests
+- **Policy & ACL check**: Optional bucket policy and ACL permissions analysis
 
 ## License
 
@@ -344,6 +345,7 @@ s3tester \
 | `--no-redirects` | Do not follow HTTP redirects | - |
 | `--max-redirects` | Maximum redirects to follow | `10` |
 | `--verbose` | Enable verbose output | `false` |
+| `--check-policy` | Enable bucket policy and ACL check (requires s3:GetBucketPolicy and s3:GetBucketAcl permissions) | `false` |
 | `--help, -h` | Show help message | - |
 | `--version` | Show version information | - |
 
@@ -369,6 +371,124 @@ s3tester --endpoint aws --region us-east-1 \
          --access-key KEY \
          --secret-key SECRET
 ```
+
+## Policy & ACL Check
+
+The `--check-policy` flag enables an additional test that retrieves and analyzes the bucket's policy and ACL (Access Control List) permissions.
+
+### What It Checks
+
+- **Bucket Policy**: Retrieves and parses the bucket policy document (JSON format)
+  - Whether a policy is configured
+  - Number of policy statements
+  - Allowed actions (e.g., `s3:GetObject`, `s3:PutObject`)
+  - Denied actions
+  - Principals with access (users, accounts, or `*` for public)
+  - Resources affected by the policy
+
+- **Bucket ACL**: Retrieves and parses the bucket ACL (XML format)
+  - Bucket owner information
+  - Public read/write access status
+  - All ACL grants with permissions
+
+### Permissions Required
+
+To retrieve bucket policy and ACL information, your AWS credentials must have the following IAM permissions:
+
+- `s3:GetBucketPolicy` - Required to retrieve the bucket policy document
+- `s3:GetBucketAcl` - Required to retrieve the bucket ACL
+
+If these permissions are not granted, the check will return a **WARN** status with an "AccessDenied" error message.
+
+### Example Output
+
+#### Console Output (with --check-policy flag):
+
+```
+[5/5] Bucket Policy & ACL Check ......................................... ✓ PASS
+  Bucket Policy:
+    Has Policy: Yes
+    Statements: 2
+    Allowed Actions: s3:GetObject, s3:PutObject, s3:DeleteObject
+    Denied Actions: s3:DeleteBucket
+    Principals: *, arn:aws:iam::123456789012:user/Admin
+    Resources: arn:aws:s3:::my-bucket/*
+  Bucket ACL:
+    Owner: admin@example.com (CanonicalUser)
+    Public Access: READ
+    Grants:
+      - admin@example.com: FULL_CONTROL
+      - AllUsers: READ
+```
+
+#### JSON Output (with --check-policy flag):
+
+```json
+{
+  "testName": "Bucket Policy & ACL Check",
+  "status": "PASS",
+  "duration": "150ms",
+  "details": {
+    "policy": {
+      "hasPolicy": true,
+      "statementCount": 2,
+      "allowedActions": ["s3:GetObject", "s3:PutObject"],
+      "deniedActions": ["s3:DeleteBucket"],
+      "principals": ["*", "arn:aws:iam::123456789012:user/Admin"],
+      "resources": ["arn:aws:s3:::my-bucket/*"]
+    },
+    "acl": {
+      "owner": {
+        "grantee": {
+          "id": "abc123...",
+          "displayName": "admin@example.com",
+          "type": "CanonicalUser"
+        },
+        "permission": ""
+      },
+      "publicRead": true,
+      "publicWrite": false,
+      "grants": [...]
+    }
+  }
+}
+```
+
+### Usage Example
+
+```bash
+s3tester --endpoint aws --region us-east-1 \
+         --bucket my-bucket \
+         --access-key AKIAIOSFODNN7EXAMPLE \
+         --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
+         --check-policy
+```
+
+### Provider Policy & ACL Support
+
+Different S3-compatible providers have varying levels of support for bucket policies and ACLs. The `--check-policy` flag works best with providers that have full S3 API compatibility.
+
+| Provider | Bucket Policy Support | Bucket ACL Support | Exposed via S3 API (Policy) | Exposed via S3 API (ACL) | Notes |
+|----------|----------------------|-------------------|------------------------------|---------------------------|-------|
+| AWS S3 | ✔️ Full | ✔️ Full | ✔️ Yes | ✔️ Yes | Canonical implementation |
+| MinIO / AIStor (Community + Enterprise) | ✔️ Full | ❌ No (synthetic only) | ✔️ Yes | ⚠️ Synthetic only | ACLs disabled; returns fake ACL for compatibility |
+| Wasabi | ✔️ Full | ✔️ Full | ✔️ Yes | ✔️ Yes | Very AWS‑compatible |
+| DigitalOcean Spaces | ✔️ Full | ✔️ Full | ✔️ Yes | ✔️ Yes | AWS‑like behavior |
+| Ceph RGW | ✔️ Full | ✔️ Full | ✔️ Yes | ✔️ Yes | Very complete S3 implementation |
+| Dell EMC ECS | ✔️ Full | ✔️ Full | ✔️ Yes | ✔️ Yes | Enterprise S3‑compatible |
+| NetApp StorageGRID | ✔️ Full | ✔️ Full | ✔️ Yes | ✔️ Yes | Enterprise S3‑compatible |
+| IBM Cloud Object Storage | ✔️ Full | ✔️ Full | ✔️ Yes | ✔️ Yes | Supports both APIs |
+| Backblaze B2 (S3 API) | ⚠️ IAM only | ❌ No | ❌ No | ❌ No | No S3 policy/ACL endpoints |
+| Cloudflare R2 | ⚠️ IAM only | ❌ No | ❌ No | ❌ No | No S3 policy/ACL APIs |
+| Google Cloud Storage (S3 interoperability) | ❌ No | ❌ No | ❌ No | ❌ No | Only partial S3 compatibility |
+| Hetzner Storage Boxes (S3) | ⚠️ Partial | ❌ No | ❌ No | ❌ No | Only basic S3 operations |
+
+**Notes:**
+- **Full Policy/ACL**: Provider implements the standard S3 policy and ACL APIs with full feature parity
+- **IAM only**: Provider uses IAM policies instead of S3 bucket policies; no ACL support
+- **Synthetic only**: Provider returns synthetic/fake ACL responses for compatibility but doesn't support real ACLs
+- **Partial**: Provider has limited policy support; may not support all S3 policy features
+- **No**: Provider does not expose S3 policy or ACL APIs
 
 ## Output Format
 
@@ -761,6 +881,8 @@ Any provider that implements the S3 API should work. Common examples:
 - Google Cloud Storage (S3 compatibility mode)
 - Azure Blob Storage (S3 compatibility mode)
 
+> **Note**: See the [Provider Policy & ACL Support](#provider-policy--acl-support) table above for detailed information about which providers support bucket policies and ACLs.
+
 ## Architecture
 
 The S3 Bucket Tester is organized into several components:
@@ -808,14 +930,26 @@ The S3 Bucket Tester is organized into several components:
         ┌──────────────┼──────────────┐
         ▼              ▼              ▼
 ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│ Output       │ │ Remediation  │ │ Verbose      │
-│ Formatter    │ │ Engine       │ │ Logger       │
-│              │ │              │ │              │
-│ - Console    │ │ - Analyze    │ │ - Detailed   │
-│   output     │ │   errors     │ │   logging    │
-│ - JSON       │ │ - Suggest    │ │ - Debug      │
-│   output     │ │   fixes      │ │   info       │
+│ Policy       │ │ Output       │ │ Remediation  │
+│ Checker      │ │ Formatter    │ │ Engine       │
+│ (policy.go)  │ │              │ │              │
+│              │ │ - Console    │ │ - Analyze    │
+│ - Bucket     │ │   output     │ │   errors     │
+│   Policy     │ │ - JSON       │ │ - Suggest    │
+│ - Bucket     │ │   output     │ │   fixes      │
+│   ACL        │ │              │ │              │
 └──────────────┘ └──────────────┘ └──────────────┘
+                       │
+                       ▼
+              ┌──────────────┐
+              │ Verbose      │
+              │ Logger       │
+              │              │
+              │ - Detailed   │
+              │   logging    │
+              │ - Debug      │
+              │   info       │
+              └──────────────┘
 ```
 
 ### Package Structure
@@ -831,6 +965,7 @@ s3-bucket-tester/
 │   │   ├── dns.go            # DNS resolution checker
 │   │   ├── tcp.go            # TCP connectivity checker
 │   │   ├── tls.go            # TLS certificate checker
+│   │   ├── policy.go         # Bucket policy and ACL checker
 │   │   ├── verbose.go        # Verbose logging
 │   │   └── checker.go        # Base checker interface
 │   ├── config/
@@ -857,8 +992,9 @@ s3-bucket-tester/
 3. **TCP Connectivity**: Connection is established to the endpoint
 4. **TLS Certificate**: SSL/TLS certificate is validated
 5. **Authentication**: Bucket access is tested with provided credentials
-6. **Output Results**: Results are displayed in console and optionally saved to JSON
-7. **Remediation**: Fix suggestions are provided for any failed tests
+6. **Policy & ACL Check** (optional): If `--check-policy` flag is used, bucket policy and ACL are retrieved and analyzed
+7. **Output Results**: Results are displayed in console and optionally saved to JSON
+8. **Remediation**: Fix suggestions are provided for any failed tests
 
 ## Building
 
