@@ -12,6 +12,9 @@ import (
 	"github.com/s3-bucket-tester/s3tester/pkg/remediation"
 )
 
+// Version is set via ldflags at build time
+var version = "dev"
+
 const (
 	ExitCodeSuccess = 0
 	ExitCodeFailed  = 1
@@ -28,7 +31,9 @@ func main() {
 	}
 
 	// Validate configuration
-	fmt.Fprintf(os.Stderr, "DEBUG: Before validation, Endpoint=%s, PathStyle=%v\n", cfg.Endpoint, cfg.PathStyle)
+	if cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "DEBUG: Before validation, Endpoint=%s, PathStyle=%v\n", cfg.Endpoint, cfg.PathStyle)
+	}
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(os.Stderr, "Configuration error: %v\n", err)
 		os.Exit(ExitCodeConfig)
@@ -58,10 +63,12 @@ func main() {
 	if cfg.Warning != "" {
 		warningCount = strings.Count(cfg.Warning, "\n") + 1
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG: After validation, WarningCount=%d\n", warningCount)
+	if cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "DEBUG: After validation, WarningCount=%d\n", warningCount)
+	}
 
-	// Print warning if any
-	if cfg.Warning != "" {
+	// Print warning if any (only in verbose mode)
+	if cfg.Verbose && cfg.Warning != "" {
 		fmt.Fprintf(os.Stderr, "\n%s\n", cfg.Warning)
 	}
 
