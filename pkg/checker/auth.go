@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -143,6 +144,35 @@ func (c *AuthChecker) Check() output.TestResult {
 	// Read response body
 	body, _ := io.ReadAll(resp.Body)
 
+	// Log response body if present and verbose
+	if c.verbose != nil && c.verbose.enabled && len(body) > 0 {
+		fmt.Println("\nResponse Body:")
+		fmt.Println(strings.Repeat("-", 70))
+		bodyStr := string(body)
+
+		// Try to beautify JSON
+		var jsonBody interface{}
+		if json.Unmarshal(body, &jsonBody) == nil {
+			// Successfully parsed as JSON, format it nicely
+			formatted, err := json.MarshalIndent(jsonBody, "", "  ")
+			if err == nil {
+				fmt.Println(string(formatted))
+			} else {
+				fmt.Println(bodyStr)
+			}
+		} else if strings.TrimSpace(bodyStr) != "" && strings.HasPrefix(strings.TrimSpace(bodyStr), "<") {
+			// XML - try to beautify
+			formattedXML, err := beautifyXML(body)
+			if err == nil {
+				fmt.Println(formattedXML)
+			} else {
+				fmt.Println(bodyStr)
+			}
+		} else {
+			fmt.Println(bodyStr)
+		}
+	}
+
 	// Parse response
 	authResult := output.AuthResult{
 		Success:      resp.StatusCode >= 200 && resp.StatusCode < 300,
@@ -151,6 +181,7 @@ func (c *AuthChecker) Check() output.TestResult {
 		ResponseTime: time.Since(startTime).Milliseconds(),
 		Provider:     c.detectProvider(resp),
 		Endpoint:     c.Endpoint,
+		ResponseBody: string(body),
 	}
 
 	// Check bucket existence and access
