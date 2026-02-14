@@ -9,6 +9,16 @@ import (
 	"github.com/s3-bucket-tester/s3tester/pkg/output"
 )
 
+// ProviderCapabilities defines the capabilities of a provider
+type ProviderCapabilities struct {
+	Name               string
+	PolicySupport      string // "Full", "IAM only", "Partial", "None"
+	ACLSupport         string // "Full", "Synthetic only", "None"
+	VirtualHostSupport bool
+	PathStyleSupport   bool
+	Notes              string
+}
+
 // Config holds the application configuration
 type Config struct {
 	Endpoint       string
@@ -28,15 +38,118 @@ type Config struct {
 	Warning        string
 
 	// New fields
-	Provider      string
-	VirtualHosted bool
-	PathStyle     bool
+	Provider             string
+	DetectedProvider     string
+	VirtualHosted        bool
+	PathStyle            bool
+	CheckPolicy          bool // Enable bucket policy and ACL check
+	ProviderCapabilities *ProviderCapabilities
 }
 
 // ProviderEndpoint defines endpoint templates for built-in providers
 type ProviderEndpoint struct {
 	Template    string
 	Description string
+}
+
+// Provider capabilities based on S3 compatibility
+var ProviderCapabilitiesMap = map[string]*ProviderCapabilities{
+	"aws": {
+		Name:               "AWS S3",
+		PolicySupport:      "Full",
+		ACLSupport:         "Full",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "Path-style is deprecated but functional",
+	},
+	"wasabi": {
+		Name:               "Wasabi",
+		PolicySupport:      "Full",
+		ACLSupport:         "Full",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "Very AWS-compatible",
+	},
+	"ibm": {
+		Name:               "IBM Cloud Object Storage",
+		PolicySupport:      "Full",
+		ACLSupport:         "Full",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "Supports both APIs",
+	},
+	"do": {
+		Name:               "DigitalOcean Spaces",
+		PolicySupport:      "Full",
+		ACLSupport:         "Full",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "AWS-like behavior",
+	},
+	"b2": {
+		Name:               "Backblaze B2 (S3 API)",
+		PolicySupport:      "IAM only",
+		ACLSupport:         "None",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "No policy/ACL APIs",
+	},
+	"minio": {
+		Name:               "MinIO / AIStor",
+		PolicySupport:      "Full",
+		ACLSupport:         "Synthetic only",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "Fully supports both styles",
+	},
+	"cloudflare": {
+		Name:               "Cloudflare R2",
+		PolicySupport:      "IAM only",
+		ACLSupport:         "None",
+		VirtualHostSupport: true,
+		PathStyleSupport:   false,
+		Notes:              "No ACL/policy; path-style not supported",
+	},
+	"hetzner": {
+		Name:               "Hetzner Storage Boxes (S3)",
+		PolicySupport:      "Partial",
+		ACLSupport:         "None",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "Basic S3 only",
+	},
+	"ceph": {
+		Name:               "Ceph RGW",
+		PolicySupport:      "Full",
+		ACLSupport:         "Full",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "Very complete S3 implementation",
+	},
+	"dell": {
+		Name:               "Dell EMC ECS",
+		PolicySupport:      "Full",
+		ACLSupport:         "Full",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "Enterprise S3-compatible",
+	},
+	"netapp": {
+		Name:               "NetApp StorageGRID",
+		PolicySupport:      "Full",
+		ACLSupport:         "Full",
+		VirtualHostSupport: true,
+		PathStyleSupport:   true,
+		Notes:              "Enterprise S3-compatible",
+	},
+	"custom": {
+		Name:               "Custom/Unknown S3-Compatible",
+		PolicySupport:      "Unknown",
+		ACLSupport:         "Unknown",
+		VirtualHostSupport: false,
+		PathStyleSupport:   false,
+		Notes:              "Capabilities may vary - consult provider documentation",
+	},
 }
 
 // Built-in providers
@@ -75,6 +188,48 @@ var Providers = map[string]ProviderEndpoint{
 	},
 }
 
+// DetectProvider detects the provider from the endpoint URL
+func DetectProvider(endpoint string) string {
+	endpoint = strings.ToLower(endpoint)
+
+	// Check for known providers by their domain patterns
+	if strings.Contains(endpoint, "amazonaws.com") {
+		return "aws"
+	}
+	if strings.Contains(endpoint, "wasabisys.com") {
+		return "wasabi"
+	}
+	if strings.Contains(endpoint, "backblazeb2.com") {
+		return "b2"
+	}
+	if strings.Contains(endpoint, "objectstorage.cloud.ibm.com") {
+		return "ibm"
+	}
+	if strings.Contains(endpoint, "digitaloceanspaces.com") {
+		return "do"
+	}
+	if strings.Contains(endpoint, "minio") || strings.Contains(endpoint, "aistor") {
+		return "minio"
+	}
+	if strings.Contains(endpoint, "cloudflare") || strings.Contains(endpoint, "r2") {
+		return "cloudflare"
+	}
+	if strings.Contains(endpoint, "hetzner") {
+		return "hetzner"
+	}
+	if strings.Contains(endpoint, "ceph") || strings.Contains(endpoint, "rgw") {
+		return "ceph"
+	}
+	if strings.Contains(endpoint, "dell") || strings.Contains(endpoint, "ecs") {
+		return "dell"
+	}
+	if strings.Contains(endpoint, "netapp") || strings.Contains(endpoint, "storagegrid") {
+		return "netapp"
+	}
+
+	return "custom"
+}
+
 // GetDefaultConfig returns the default configuration
 func GetDefaultConfig() *Config {
 	return &Config{
@@ -94,9 +249,12 @@ func GetDefaultConfig() *Config {
 		Verbose:        false,
 
 		// New fields
-		Provider:      "",
-		VirtualHosted: false,
-		PathStyle:     false,
+		Provider:             "",
+		DetectedProvider:     "",
+		VirtualHosted:        false,
+		PathStyle:            false,
+		CheckPolicy:          false,
+		ProviderCapabilities: nil,
 	}
 }
 
@@ -122,6 +280,10 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
+
+	// Detect provider from endpoint
+	c.DetectedProvider = DetectProvider(c.Endpoint)
+	c.ProviderCapabilities = ProviderCapabilitiesMap[c.DetectedProvider]
 
 	// Add protocol if not present (for custom endpoints)
 	if c.Endpoint != "" && !strings.HasPrefix(c.Endpoint, "http://") && !strings.HasPrefix(c.Endpoint, "https://") {
@@ -158,17 +320,58 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid max-redirects: must be 0 or greater")
 	}
 
-	// Validate addressing style
-	if c.PathStyle {
-		// Check if endpoint uses a known virtual-hosted provider
-		for _, provider := range []string{"aws", "wasabi", "b2", "ibm", "do", "your-objectstorage.com"} {
-			if strings.Contains(c.Endpoint, provider) || strings.Contains(c.Endpoint, "cloudhubone.com") {
-				c.Warning = "Warning: --path-style addressing may not be supported by this provider. Try removing --path-style flag."
+	// Generate provider-specific warnings
+	c.generateProviderWarnings()
+
+	return nil
+}
+
+// generateProviderWarnings generates warnings based on provider capabilities
+func (c *Config) generateProviderWarnings() {
+	if c.ProviderCapabilities == nil {
+		return
+	}
+
+	// Path-style warning
+	if c.PathStyle && !c.ProviderCapabilities.PathStyleSupport {
+		if c.Warning != "" {
+			c.Warning += "\n"
+		}
+		if c.DetectedProvider == "custom" {
+			c.Warning += "Warning: --path-style addressing may not be supported by this provider. Try removing --path-style flag."
+		} else {
+			c.Warning += fmt.Sprintf("Warning: --path-style addressing is not supported by %s. Try removing --path-style flag.", c.ProviderCapabilities.Name)
+		}
+	} else if c.PathStyle && c.DetectedProvider != "custom" {
+		// For providers that support path-style but may have limitations
+		if c.ProviderCapabilities.Notes != "" && strings.Contains(c.ProviderCapabilities.Notes, "deprecated") {
+			if c.Warning != "" {
+				c.Warning += "\n"
 			}
+			c.Warning += fmt.Sprintf("Warning: --path-style addressing is deprecated for %s. %s", c.ProviderCapabilities.Name, c.ProviderCapabilities.Notes)
 		}
 	}
 
-	return nil
+	// Check-policy warning
+	if c.CheckPolicy {
+		if c.DetectedProvider == "custom" {
+			// Custom endpoints get the generic warning
+			if c.Warning != "" {
+				c.Warning += "\n"
+			}
+			c.Warning += "Warning: --check-policy is not supported on all S3-Compatible providers. This feature may not work with your provider."
+		} else if c.ProviderCapabilities.PolicySupport == "None" {
+			if c.Warning != "" {
+				c.Warning += "\n"
+			}
+			c.Warning += fmt.Sprintf("Warning: --check-policy is not supported by %s. Policy support: %s", c.ProviderCapabilities.Name, c.ProviderCapabilities.PolicySupport)
+		} else if c.ProviderCapabilities.PolicySupport != "Full" {
+			if c.Warning != "" {
+				c.Warning += "\n"
+			}
+			c.Warning += fmt.Sprintf("Warning: --check-policy has limited support for %s. Policy support: %s. %s", c.ProviderCapabilities.Name, c.ProviderCapabilities.PolicySupport, c.ProviderCapabilities.Notes)
+		}
+	}
 }
 
 // ResolveProviderEndpoint resolves the endpoint from provider template

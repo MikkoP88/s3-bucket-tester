@@ -33,7 +33,32 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Configuration error: %v\n", err)
 		os.Exit(ExitCodeConfig)
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG: After validation, Warning=%s\n", cfg.Warning)
+
+	// Print debug information about detected provider
+	if cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "DEBUG: Detected provider: %s\n", cfg.DetectedProvider)
+		if cfg.ProviderCapabilities != nil {
+			fmt.Fprintf(os.Stderr, "DEBUG: Provider name: %s\n", cfg.ProviderCapabilities.Name)
+			fmt.Fprintf(os.Stderr, "DEBUG: Policy support: %s\n", cfg.ProviderCapabilities.PolicySupport)
+			fmt.Fprintf(os.Stderr, "DEBUG: ACL support: %s\n", cfg.ProviderCapabilities.ACLSupport)
+
+			// For custom providers, show "Unknown" instead of false
+			if cfg.DetectedProvider == "custom" {
+				fmt.Fprintf(os.Stderr, "DEBUG: Virtual-host support: Unknown\n")
+				fmt.Fprintf(os.Stderr, "DEBUG: Path-style support: Unknown\n")
+			} else {
+				fmt.Fprintf(os.Stderr, "DEBUG: Virtual-host support: %v\n", cfg.ProviderCapabilities.VirtualHostSupport)
+				fmt.Fprintf(os.Stderr, "DEBUG: Path-style support: %v\n", cfg.ProviderCapabilities.PathStyleSupport)
+			}
+			fmt.Fprintf(os.Stderr, "DEBUG: Notes: %s\n", cfg.ProviderCapabilities.Notes)
+		}
+	}
+
+	warningCount := 0
+	if cfg.Warning != "" {
+		warningCount = strings.Count(cfg.Warning, "\n") + 1
+	}
+	fmt.Fprintf(os.Stderr, "DEBUG: After validation, WarningCount=%d\n", warningCount)
 
 	// Print warning if any
 	if cfg.Warning != "" {
@@ -51,11 +76,11 @@ func main() {
 	report := &output.TestReport{
 		Config:    outputConfig,
 		StartTime: time.Now(),
-		Results:   make([]output.TestResult, 0, 4),
+		Results:   make([]output.TestResult, 0, 5), // Up to 5 tests if policy check is enabled
 	}
 
 	// Run tests
-	runTests(report, hostname, port)
+	runTests(report, hostname, port, cfg.CheckPolicy)
 
 	// Calculate summary
 	report.EndTime = time.Now()
@@ -85,7 +110,7 @@ func main() {
 }
 
 // runTests runs all tests and populates the report
-func runTests(report *output.TestReport, hostname string, port int) {
+func runTests(report *output.TestReport, hostname string, port int, checkPolicy bool) {
 	// Test 1: DNS Resolution Check
 	dnsChecker := checker.NewDNSChecker(report.Config, hostname)
 	dnsResult := dnsChecker.Check()
@@ -105,6 +130,13 @@ func runTests(report *output.TestReport, hostname string, port int) {
 	authChecker := checker.NewAuthChecker(report.Config)
 	authResult := authChecker.Check()
 	report.Results = append(report.Results, authResult)
+
+	// Test 5: Bucket Policy & ACL Check (optional)
+	if checkPolicy {
+		policyChecker := checker.NewPolicyChecker(report.Config)
+		policyResult := policyChecker.Check()
+		report.Results = append(report.Results, policyResult)
+	}
 }
 
 // printRemediations prints remediation suggestions for failed tests
