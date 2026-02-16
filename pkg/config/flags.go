@@ -9,6 +9,9 @@ import (
 	"github.com/s3-bucket-tester/s3tester/pkg/checker"
 )
 
+// Version is set via ldflags at build time
+var version = "dev"
+
 // ParseFlags parses command-line flags and returns the configuration
 func ParseFlags(args []string) (*Config, error) {
 	config := GetDefaultConfig()
@@ -22,7 +25,7 @@ func ParseFlags(args []string) (*Config, error) {
 			printHelp()
 			os.Exit(0)
 		case arg == "--version":
-			fmt.Println("s3-bucket-tester version 1.0.0")
+			fmt.Printf("s3-bucket-tester version %s\n", version)
 			os.Exit(0)
 		case arg == "--endpoint":
 			if i+1 >= len(args) {
@@ -100,6 +103,8 @@ func ParseFlags(args []string) (*Config, error) {
 			config.VirtualHosted = true
 		case arg == "--path-style":
 			config.PathStyle = true
+		case arg == "--check-policy":
+			config.CheckPolicy = true
 		case strings.HasPrefix(arg, "--"):
 			return nil, fmt.Errorf("unknown flag: %s", arg)
 		}
@@ -161,6 +166,8 @@ OPTIONAL FLAGS:
     --no-redirects         Do not follow HTTP redirects
     --max-redirects <n>    Maximum redirects to follow (default: 10)
     --verbose              Enable verbose output
+    --check-policy         Enable bucket policy and ACL check
+                           (requires s3:GetBucketPolicy and s3:GetBucketAcl permissions)
     --help, -h             Show this help message
     --version              Show version information
 
@@ -197,7 +204,14 @@ EXAMPLES:
              --bucket my-bucket \
              --access-key KEY \
              --secret-key SECRET \
-             --auth-type sigv2`)
+             --auth-type sigv2
+
+    # With bucket policy and ACL check
+    s3tester --endpoint aws --region us-east-1 \
+             --bucket my-bucket \
+             --access-key KEY \
+             --secret-key SECRET \
+             --check-policy`)
 }
 
 // ListProviders prints all available built-in providers

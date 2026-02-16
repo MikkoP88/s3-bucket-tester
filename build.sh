@@ -3,7 +3,7 @@
 # This script builds the s3tester binary for Linux
 
 BINARY_NAME="s3tester"
-VERSION="1.0.0"
+VERSION="1.1.1"
 BUILD_DIR="build"
 MAIN_PATH="./cmd/s3tester"
 LDFLAGS="-ldflags=-s -w -X main.version=${VERSION}"
@@ -74,3 +74,4 @@ fi
 
 echo ""
 echo "Done!"
+

@@ -3,7 +3,7 @@
 
 # Binary name
 BINARY_NAME=s3tester
-VERSION=1.0.0
+VERSION=1.1.1
 
 # Build directory
 BUILD_DIR=build

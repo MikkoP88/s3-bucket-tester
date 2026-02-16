@@ -32,6 +32,8 @@ func GetRemediation(testName string, err error) *Remediation {
 		return getTLSRemediation(errMsg, lowerErrMsg)
 	case "Bucket Authentication Check":
 		return getAuthRemediation(errMsg, lowerErrMsg)
+	case "Bucket Policy & ACL Check":
+		return getPolicyACLRemediation(errMsg, lowerErrMsg)
 	default:
 		return &Remediation{
 			Error:      errMsg,
@@ -350,6 +352,53 @@ func getAuthRemediation(errMsg, lowerErrMsg string) *Remediation {
 			"Check IAM user/role has required permissions",
 			"Review bucket policy and ACLs",
 			"Check system time is synchronized",
+		}
+	}
+
+	return r
+}
+
+// getPolicyACLRemediation provides policy and ACL-specific remediation
+func getPolicyACLRemediation(errMsg, lowerErrMsg string) *Remediation {
+	r := &Remediation{Error: errMsg}
+
+	switch {
+	case strings.Contains(lowerErrMsg, "signature") && strings.Contains(lowerErrMsg, "does not match"):
+		r.Cause = "Signature calculation failed - credentials or region mismatch"
+		r.Suggestion = "Check secret key, region, and endpoint configuration for policy/ACL requests"
+		r.Commands = []string{
+			"Verify secret key is correct (check for typos)",
+			"Verify region matches the bucket's region",
+			"Verify endpoint URL is correct",
+			"Check if path-style addressing is required",
+			"Some S3-compatible providers may not support policy/ACL operations",
+		}
+	case strings.Contains(lowerErrMsg, "access denied"):
+		r.Cause = "Insufficient permissions to read bucket policy or ACL"
+		r.Suggestion = "The credentials used do not have permission to read bucket policy or ACL. This is common for S3-compatible providers where policy/ACL access requires specific IAM permissions."
+		r.Commands = []string{
+			"Verify IAM user has GetBucketPolicy permission: s3:GetBucketPolicy",
+			"Verify IAM user has GetBucketAcl permission: s3:GetBucketAcl",
+			"Check bucket policy for explicit deny statements",
+			"Review IAM user permissions: aws iam list-attached-user-policies --user-name <username>",
+			"Grant required permissions: aws iam attach-user-policy --user-name <username> --policy-arn <arn>",
+		}
+	case strings.Contains(lowerErrMsg, "no such bucket"):
+		r.Cause = "The specified bucket does not exist"
+		r.Suggestion = "Verify the bucket name and region are correct"
+		r.Commands = []string{
+			"List buckets to verify: aws s3 ls (AWS CLI) or mc ls (MinIO)",
+			"Check bucket name spelling",
+			"Verify region matches the bucket's actual region",
+		}
+	default:
+		r.Cause = "Failed to retrieve bucket policy or ACL"
+		r.Suggestion = "Check credentials, permissions, and bucket configuration"
+		r.Commands = []string{
+			"Verify credentials have read access to bucket policy and ACL",
+			"Check bucket exists and is accessible",
+			"Review IAM user/role permissions for s3:GetBucketPolicy and s3:GetBucketAcl",
+			"Some S3-compatible providers may not support policy/ACL operations",
 		}
 	}
 

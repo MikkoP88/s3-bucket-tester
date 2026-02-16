@@ -44,32 +44,32 @@ type TCPResult struct {
 
 // CertificateInfo contains SSL/TLS certificate details
 type CertificateInfo struct {
-	Subject            string    `json:"subject"`
-	Issuer             string    `json:"issuer"`
-	NotBefore          time.Time `json:"notBefore"`
-	NotAfter           time.Time `json:"notAfter"`
-	SANs               []string  `json:"sans"`
-	SerialNumber       string    `json:"serialNumber"`
-	SignatureAlgorithm string    `json:"signatureAlgorithm"`
-	DNSNames           []string  `json:"dnsNames"`
-	EmailAddresses     []string  `json:"emailAddresses"`
-	IPAddresses        []string  `json:"ipAddresses"`
-	URIs               []string  `json:"uris"`
-	IsExpired          bool      `json:"isExpired"`
-	DaysUntilExpiry    int       `json:"daysUntilExpiry"`
+	Subject            string            `json:"subject"`
+	Issuer             string            `json:"issuer"`
+	NotBefore          time.Time         `json:"notBefore"`
+	NotAfter           time.Time         `json:"notAfter"`
+	SANs               []string          `json:"sans"`
+	SerialNumber       string            `json:"serialNumber"`
+	SignatureAlgorithm string            `json:"signatureAlgorithm"`
+	DNSNames           []string          `json:"dnsNames"`
+	EmailAddresses     []string          `json:"emailAddresses"`
+	IPAddresses        []string          `json:"ipAddresses"`
+	URIs               []string          `json:"uris"`
+	IsExpired          bool              `json:"isExpired"`
+	DaysUntilExpiry    int               `json:"daysUntilExpiry"`
 	Chain              []CertificateInfo `json:"chain,omitempty"`
 }
 
 // TLSResult contains TLS certificate check details
 type TLSResult struct {
-	Host          string            `json:"host"`
-	Port          int               `json:"port"`
-	Certificate   CertificateInfo   `json:"certificate"`
-	Verified      bool              `json:"verified"`
-	VerifyError   string            `json:"verifyError,omitempty"`
-	TLSVersion    string            `json:"tlsVersion"`
-	CipherSuite   string            `json:"cipherSuite"`
-	PeerCerts     []CertificateInfo `json:"peerCerts"`
+	Host        string            `json:"host"`
+	Port        int               `json:"port"`
+	Certificate CertificateInfo   `json:"certificate"`
+	Verified    bool              `json:"verified"`
+	VerifyError string            `json:"verifyError,omitempty"`
+	TLSVersion  string            `json:"tlsVersion"`
+	CipherSuite string            `json:"cipherSuite"`
+	PeerCerts   []CertificateInfo `json:"peerCerts"`
 }
 
 // AuthResult contains authentication check details
@@ -82,6 +82,70 @@ type AuthResult struct {
 	ResponseTime  int64  `json:"responseTimeMs"`
 	Provider      string `json:"provider,omitempty"`
 	Endpoint      string `json:"endpoint"`
+	ResponseBody  string `json:"responseBody,omitempty"`
+}
+
+// PolicyResult contains bucket policy check details
+type PolicyResult struct {
+	HasPolicy      bool          `json:"hasPolicy"`
+	PolicyDocument *BucketPolicy `json:"policyDocument,omitempty"`
+	StatementCount int           `json:"statementCount"`
+	AllowedActions []string      `json:"allowedActions,omitempty"`
+	DeniedActions  []string      `json:"deniedActions,omitempty"`
+	Principals     []string      `json:"principals,omitempty"`
+	Resources      []string      `json:"resources,omitempty"`
+	Conditions     []string      `json:"conditions,omitempty"`
+	Error          string        `json:"error,omitempty"`
+	ResponseBody   string        `json:"responseBody,omitempty"`
+}
+
+// BucketPolicy represents an S3 bucket policy document
+type BucketPolicy struct {
+	Version   string      `json:"version"`
+	ID        string      `json:"id,omitempty"`
+	Statement []Statement `json:"statement"`
+}
+
+// Statement represents a single statement in a bucket policy
+type Statement struct {
+	Sid       string                 `json:"sid,omitempty"`
+	Effect    string                 `json:"effect"` // "Allow" or "Deny"
+	Principal map[string]interface{} `json:"principal"`
+	Action    interface{}            `json:"action"`   // string or []string
+	Resource  interface{}            `json:"resource"` // string or []string
+	Condition map[string]interface{} `json:"condition,omitempty"`
+}
+
+// ACLResult contains bucket ACL check details
+type ACLResult struct {
+	Owner         ACLGrant   `json:"owner"`
+	Grants        []ACLGrant `json:"grants"`
+	PublicRead    bool       `json:"publicRead"`
+	PublicWrite   bool       `json:"publicWrite"`
+	AuthUsersRead bool       `json:"authUsersRead"`
+	Error         string     `json:"error,omitempty"`
+	ResponseBody  string     `json:"responseBody,omitempty"`
+}
+
+// PolicyACLResult contains combined policy and ACL check details
+type PolicyACLResult struct {
+	Policy PolicyResult `json:"policy"`
+	ACL    ACLResult    `json:"acl"`
+}
+
+// ACLGrant represents a single ACL grant
+type ACLGrant struct {
+	Grantee    ACLGrantee `json:"grantee"`
+	Permission string     `json:"permission"` // READ, WRITE, READ_ACP, WRITE_ACP, FULL_CONTROL
+}
+
+// ACLGrantee represents a grantee in an ACL
+type ACLGrantee struct {
+	ID           string `json:"id,omitempty"`
+	DisplayName  string `json:"displayName,omitempty"`
+	URI          string `json:"uri,omitempty"` // For predefined groups
+	EmailAddress string `json:"emailAddress,omitempty"`
+	Type         string `json:"type"` // CanonicalUser, AmazonCustomerByEmail, Group
 }
 
 // TestSummary contains the overall test summary
@@ -95,31 +159,45 @@ type TestSummary struct {
 
 // TestReport contains the complete test report
 type TestReport struct {
-	Config     Config      `json:"config"`
-	StartTime  time.Time   `json:"startTime"`
-	EndTime    time.Time   `json:"endTime"`
-	Duration   time.Duration `json:"duration"`
-	Results    []TestResult `json:"results"`
-	Summary    TestSummary  `json:"summary"`
+	Config    Config        `json:"config"`
+	StartTime time.Time     `json:"startTime"`
+	EndTime   time.Time     `json:"endTime"`
+	Duration  time.Duration `json:"duration"`
+	Results   []TestResult  `json:"results"`
+	Summary   TestSummary   `json:"summary"`
 }
 
 // Config contains the test configuration
 type Config struct {
-	Endpoint       string `json:"endpoint"`
-	Bucket         string `json:"bucket"`
-	Region         string `json:"region"`
-	AccessKey      string `json:"accessKey"`
-	SecretKey      string `json:"secretKey"`
-	AuthType       string `json:"authType"`
-	Port           int    `json:"port"`
-	Insecure       bool   `json:"insecure"`
-	Timeout        int    `json:"timeout"`
-	OutputFormat   string `json:"outputFormat"`
-	OutputFile     string `json:"outputFile"`
-	FollowRedirect bool   `json:"followRedirect"`
-	MaxRedirects   int    `json:"maxRedirects"`
-	Verbose        bool   `json:"verbose"`
-	PathStyle      bool   `json:"pathStyle"`
+	Endpoint             string                `json:"endpoint"`
+	Bucket               string                `json:"bucket"`
+	Region               string                `json:"region"`
+	AccessKey            string                `json:"accessKey"`
+	SecretKey            string                `json:"secretKey"`
+	AuthType             string                `json:"authType"`
+	Port                 int                   `json:"port"`
+	Insecure             bool                  `json:"insecure"`
+	Timeout              int                   `json:"timeout"`
+	OutputFormat         string                `json:"outputFormat"`
+	OutputFile           string                `json:"outputFile"`
+	FollowRedirect       bool                  `json:"followRedirect"`
+	MaxRedirects         int                   `json:"maxRedirects"`
+	Verbose              bool                  `json:"verbose"`
+	PathStyle            bool                  `json:"pathStyle"`
+	CheckPolicy          bool                  `json:"checkPolicy"`
+	Provider             string                `json:"provider"`
+	DetectedProvider     string                `json:"detectedProvider"`
+	ProviderCapabilities *ProviderCapabilities `json:"providerCapabilities,omitempty"`
+}
+
+// ProviderCapabilities defines the capabilities of a provider
+type ProviderCapabilities struct {
+	Name               string `json:"name"`
+	PolicySupport      string `json:"policySupport"`
+	ACLSupport         string `json:"aclSupport"`
+	VirtualHostSupport bool   `json:"virtualHostSupport"`
+	PathStyleSupport   bool   `json:"pathStyleSupport"`
+	Notes              string `json:"notes"`
 }
 
 // NewCertificateInfo creates a CertificateInfo from x509.Certificate
