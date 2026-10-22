@@ -163,6 +163,21 @@ s3tester \
   --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 ```
 
+### Basic Usage (Container)
+Copy the binary into a running container and make it executable:
+```bash
+docker cp s3tester-linux-amd64 <container_name>:/tmp/s3tester
+docker exec <container_name> chmod +x /tmp/s3tester
+```
+Run the S3 Bucket Tester inside the container:
+```bash
+docker exec <container_name> /tmp/s3tester \
+  --endpoint https://s3.amazonaws.com \
+  --bucket my-test-bucket \
+  --access-key AKIAIOSFODNN7EXAMPLE \
+  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
 ### MinIO Example (Path-style)
 
 ```bash
