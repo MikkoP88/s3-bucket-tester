@@ -157,8 +157,8 @@ func TestParseFlags_MissingValue(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name  string
-		args  []string
+		name string
+		args []string
 	}{
 		{"Missing endpoint value", []string{"--endpoint"}},
 		{"Missing bucket value", []string{"--bucket"}},

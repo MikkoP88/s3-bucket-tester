@@ -13,9 +13,8 @@ import (
 	"github.com/s3-bucket-tester/s3tester/pkg/remediation"
 )
 
-// Version is set via ldflags at build time
-var version = "dev"
-
+// Exit codes for the CLI. The version string shown by --version lives in
+// pkg/config (set via ldflags at build time).
 const (
 	ExitCodeSuccess = 0
 	ExitCodeFailed  = 1

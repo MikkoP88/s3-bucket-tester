@@ -11,7 +11,7 @@ func TestGetDefaultConfig(t *testing.T) {
 	tests := []struct {
 		name     string
 		field    string
-		expected interface{}
+		expected any
 	}{
 		{"Endpoint", "Endpoint", ""},
 		{"Bucket", "Bucket", ""},

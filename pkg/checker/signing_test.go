@@ -96,87 +96,87 @@ func TestSignV2Query_StringToSignParts(t *testing.T) {
 // only, sorted, with values.
 func TestBuildCanonicalResource(t *testing.T) {
 	tests := []struct {
-		name       string
-		url        string
-		bucket     string
-		pathStyle  bool
+		name         string
+		url          string
+		bucket       string
+		pathStyle    bool
 		wantResource string
 	}{
 		{
-			name:       "path-style object",
-			url:        "http://s3.example.com/johnsmith/photos/puppy.jpg",
-			bucket:     "johnsmith",
-			pathStyle:  true,
+			name:         "path-style object",
+			url:          "http://s3.example.com/johnsmith/photos/puppy.jpg",
+			bucket:       "johnsmith",
+			pathStyle:    true,
 			wantResource: "/johnsmith/photos/puppy.jpg",
 		},
 		{
-			name:       "path-style bucket with acl",
-			url:        "http://s3.example.com/test-bucket?acl",
-			bucket:     "test-bucket",
-			pathStyle:  true,
+			name:         "path-style bucket with acl",
+			url:          "http://s3.example.com/test-bucket?acl",
+			bucket:       "test-bucket",
+			pathStyle:    true,
 			wantResource: "/test-bucket?acl",
 		},
 		{
-			name:       "path-style bucket without query",
-			url:        "http://s3.example.com/test-bucket",
-			bucket:     "test-bucket",
-			pathStyle:  true,
+			name:         "path-style bucket without query",
+			url:          "http://s3.example.com/test-bucket",
+			bucket:       "test-bucket",
+			pathStyle:    true,
 			wantResource: "/test-bucket",
 		},
 		{
-			name:       "virtual-hosted object",
-			url:        "http://test-bucket.s3.example.com/photos/puppy.jpg",
-			bucket:     "test-bucket",
-			pathStyle:  false,
+			name:         "virtual-hosted object",
+			url:          "http://test-bucket.s3.example.com/photos/puppy.jpg",
+			bucket:       "test-bucket",
+			pathStyle:    false,
 			wantResource: "/test-bucket/photos/puppy.jpg",
 		},
 		{
-			name:       "virtual-hosted root with empty path",
-			url:        "http://test-bucket.s3.example.com?policy",
-			bucket:     "test-bucket",
-			pathStyle:  false,
+			name:         "virtual-hosted root with empty path",
+			url:          "http://test-bucket.s3.example.com?policy",
+			bucket:       "test-bucket",
+			pathStyle:    false,
 			wantResource: "/test-bucket/?policy",
 		},
 		{
-			name:       "virtual-hosted root with slash path",
-			url:        "http://test-bucket.s3.example.com/?policy",
-			bucket:     "test-bucket",
-			pathStyle:  false,
+			name:         "virtual-hosted root with slash path",
+			url:          "http://test-bucket.s3.example.com/?policy",
+			bucket:       "test-bucket",
+			pathStyle:    false,
 			wantResource: "/test-bucket/?policy",
 		},
 		{
-			name:       "virtual-hosted root without query",
-			url:        "http://test-bucket.s3.example.com",
-			bucket:     "test-bucket",
-			pathStyle:  false,
+			name:         "virtual-hosted root without query",
+			url:          "http://test-bucket.s3.example.com",
+			bucket:       "test-bucket",
+			pathStyle:    false,
 			wantResource: "/test-bucket/",
 		},
 		{
-			name:       "sub-resource with value",
-			url:        "http://s3.example.com/test-bucket?versionId=abc123",
-			bucket:     "test-bucket",
-			pathStyle:  true,
+			name:         "sub-resource with value",
+			url:          "http://s3.example.com/test-bucket?versionId=abc123",
+			bucket:       "test-bucket",
+			pathStyle:    true,
 			wantResource: "/test-bucket?versionId=abc123",
 		},
 		{
-			name:       "unrecognized query parameters excluded",
-			url:        "http://s3.example.com/test-bucket?prefix=photos&max-keys=50&acl",
-			bucket:     "test-bucket",
-			pathStyle:  true,
+			name:         "unrecognized query parameters excluded",
+			url:          "http://s3.example.com/test-bucket?prefix=photos&max-keys=50&acl",
+			bucket:       "test-bucket",
+			pathStyle:    true,
 			wantResource: "/test-bucket?acl",
 		},
 		{
-			name:       "multiple sub-resources sorted",
-			url:        "http://s3.example.com/test-bucket?tagging&acl",
-			bucket:     "test-bucket",
-			pathStyle:  true,
+			name:         "multiple sub-resources sorted",
+			url:          "http://s3.example.com/test-bucket?tagging&acl",
+			bucket:       "test-bucket",
+			pathStyle:    true,
 			wantResource: "/test-bucket?acl&tagging",
 		},
 		{
-			name:       "response-header override included",
-			url:        "http://s3.example.com/test-bucket?response-content-type=text%2Fplain&prefix=x",
-			bucket:     "test-bucket",
-			pathStyle:  true,
+			name:         "response-header override included",
+			url:          "http://s3.example.com/test-bucket?response-content-type=text%2Fplain&prefix=x",
+			bucket:       "test-bucket",
+			pathStyle:    true,
 			wantResource: "/test-bucket?response-content-type=text/plain",
 		},
 	}
@@ -238,12 +238,12 @@ func TestSignV4_WireConsistency(t *testing.T) {
 	fixed := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
 	var wire struct {
-		method string
-		host   string
-		path   string
-		query  string
-		auth   string
-		date   string
+		method     string
+		host       string
+		path       string
+		query      string
+		auth       string
+		date       string
 		payloadSha string
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

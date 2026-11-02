@@ -211,4 +211,3 @@ func TestGetAuthRemediation(t *testing.T) {
 		t.Error("Expected at least one command")
 	}
 }
-

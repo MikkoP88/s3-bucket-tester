@@ -235,17 +235,17 @@ func DetectProvider(endpoint string) string {
 // GetDefaultConfig returns the default configuration
 func GetDefaultConfig() *Config {
 	return &Config{
-		Endpoint:       "",
-		Bucket:         "",
-		Region:         "us-east-1",
-		AccessKey:      "",
-		SecretKey:      "",
-		AuthType:       "sigv4",
-		Port:           0,
-		Insecure:       false,
-		Timeout:        30,
-		OutputFormat:   "",
-		OutputFile:     "",
+		Endpoint:     "",
+		Bucket:       "",
+		Region:       "us-east-1",
+		AccessKey:    "",
+		SecretKey:    "",
+		AuthType:     "sigv4",
+		Port:         0,
+		Insecure:     false,
+		Timeout:      30,
+		OutputFormat: "",
+		OutputFile:   "",
 		// Redirects are off by default: following them blindly lets a
 		// compromised endpoint redirect signed requests elsewhere.
 		FollowRedirect: false,
@@ -410,29 +410,23 @@ func (c *Config) ResolveProviderEndpoint() error {
 // applyAddressingStyle applies virtual-hosted or path-style addressing
 func (c *Config) applyAddressingStyle(endpoint string) string {
 	// If endpoint is already a full URL, parse it
-	if strings.Contains(endpoint, "://") {
-		parts := strings.Split(endpoint, "://")
-		if len(parts) == 2 {
-			protocol := parts[0]
-			hostPath := parts[1]
-
-			// Check if it's path-style (bucket in path)
-			if c.PathStyle {
-				// Already path-style or needs conversion
-				if !strings.HasPrefix(hostPath, c.Bucket+"/") {
-					// Convert to path-style
-					hostPath = c.Bucket + "/" + hostPath
-				}
-			} else {
-				// Virtual-hosted (default)
-				// Ensure bucket is in host
-				if !strings.HasPrefix(hostPath, c.Bucket+".") {
-					hostPath = c.Bucket + "." + hostPath
-				}
+	if protocol, hostPath, ok := strings.Cut(endpoint, "://"); ok {
+		// Check if it's path-style (bucket in path)
+		if c.PathStyle {
+			// Already path-style or needs conversion
+			if !strings.HasPrefix(hostPath, c.Bucket+"/") {
+				// Convert to path-style
+				hostPath = c.Bucket + "/" + hostPath
 			}
-
-			return protocol + "://" + hostPath
+		} else {
+			// Virtual-hosted (default)
+			// Ensure bucket is in host
+			if !strings.HasPrefix(hostPath, c.Bucket+".") {
+				hostPath = c.Bucket + "." + hostPath
+			}
 		}
+
+		return protocol + "://" + hostPath
 	}
 
 	// Remove protocol prefix
@@ -440,8 +434,8 @@ func (c *Config) applyAddressingStyle(endpoint string) string {
 	endpoint = strings.TrimPrefix(endpoint, "https://")
 
 	// Remove path
-	if idx := strings.Index(endpoint, "/"); idx != -1 {
-		endpoint = endpoint[:idx]
+	if host, _, ok := strings.Cut(endpoint, "/"); ok {
+		endpoint = host
 	}
 
 	return endpoint

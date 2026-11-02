@@ -74,14 +74,14 @@ func TestGetBucketPolicy_Success(t *testing.T) {
 		// Check for policy endpoint
 		if strings.Contains(r.URL.Path, "test-bucket") && strings.Contains(r.URL.RawQuery, "policy") {
 			// Encoded as a raw document so the Principal crosses real JSON
-			policy := map[string]interface{}{
+			policy := map[string]any{
 				"version": "2012-10-17",
 				"id":      "TestPolicy",
-				"statement": []map[string]interface{}{
+				"statement": []map[string]any{
 					{
 						"sid":       "PublicRead",
 						"effect":    "Allow",
-						"principal": map[string]interface{}{"AWS": "*"},
+						"principal": map[string]any{"AWS": "*"},
 						"action":    []string{"s3:GetObject"},
 						"resource":  []string{"arn:aws:s3:::test-bucket/*"},
 					},
@@ -212,20 +212,20 @@ func TestGetBucketPolicy_MultipleStatements(t *testing.T) {
 	// Create a mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.RawQuery, "policy") {
-			policy := map[string]interface{}{
+			policy := map[string]any{
 				"version": "2012-10-17",
-				"statement": []map[string]interface{}{
+				"statement": []map[string]any{
 					{
 						"sid":       "AllowRead",
 						"effect":    "Allow",
-						"principal": map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/test-user"},
+						"principal": map[string]any{"AWS": "arn:aws:iam::123456789012:user/test-user"},
 						"action":    []string{"s3:GetObject", "s3:ListBucket"},
 						"resource":  []string{"arn:aws:s3:::test-bucket/*"},
 					},
 					{
 						"sid":       "DenyDelete",
 						"effect":    "Deny",
-						"principal": map[string]interface{}{"AWS": "*"},
+						"principal": map[string]any{"AWS": "*"},
 						"action":    "s3:DeleteObject",
 						"resource":  "arn:aws:s3:::test-bucket/*",
 					},
@@ -525,8 +525,8 @@ func TestExtractActions(t *testing.T) {
 		t.Errorf("Expected 2 actions, got %d", len(actions))
 	}
 
-	// Test with []interface{}
-	actions = checker.extractActions([]interface{}{"s3:GetObject", "s3:DeleteObject"})
+	// Test with []any
+	actions = checker.extractActions([]any{"s3:GetObject", "s3:DeleteObject"})
 	if len(actions) != 2 {
 		t.Errorf("Expected 2 actions, got %d", len(actions))
 	}
@@ -617,13 +617,13 @@ func TestCheck_CombinedResults(t *testing.T) {
 	// Create a mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.RawQuery, "policy") {
-			policy := map[string]interface{}{
+			policy := map[string]any{
 				"version": "2012-10-17",
-				"statement": []map[string]interface{}{
+				"statement": []map[string]any{
 					{
 						"sid":       "AllowRead",
 						"effect":    "Allow",
-						"principal": map[string]interface{}{"AWS": "*"},
+						"principal": map[string]any{"AWS": "*"},
 						"action":    "s3:GetObject",
 						"resource":  []string{"arn:aws:s3:::test-bucket/*"},
 					},
@@ -696,7 +696,7 @@ func TestCheck_CombinedResults(t *testing.T) {
 }
 
 // policyTestServer serves a canned policy and ACL pair for verdict tests
-func policyTestServer(t *testing.T, policy map[string]interface{}, grants []output.ACLGrant) string {
+func policyTestServer(t *testing.T, policy map[string]any, grants []output.ACLGrant) string {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.RawQuery, "policy") {
@@ -763,7 +763,7 @@ func verdictTestConfig(endpoint string, mutate func(*output.Config)) output.Conf
 // owner-only ACL still passes
 func TestCheck_CleanBucketPasses(t *testing.T) {
 	url := policyTestServer(t, nil, []output.ACLGrant{{
-		Grantee: output.ACLGrantee{ID: "owner-id-123", DisplayName: "BucketOwner", Type: "CanonicalUser"},
+		Grantee:    output.ACLGrantee{ID: "owner-id-123", DisplayName: "BucketOwner", Type: "CanonicalUser"},
 		Permission: "FULL_CONTROL",
 	}})
 	result := NewPolicyChecker(verdictTestConfig(url, nil)).Check()
@@ -800,12 +800,12 @@ func TestCheck_PublicWriteACL_Escalated(t *testing.T) {
 // TestCheck_PublicReadPolicy_Escalated verifies --fail-on-public-read
 // escalates a wildcard read policy to FAIL
 func TestCheck_PublicReadPolicy_Escalated(t *testing.T) {
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"version": "2012-10-17",
-		"statement": []map[string]interface{}{{
+		"statement": []map[string]any{{
 			"sid":       "PublicRead",
 			"effect":    "Allow",
-			"principal": map[string]interface{}{"AWS": "*"},
+			"principal": map[string]any{"AWS": "*"},
 			"action":    "s3:GetObject",
 			"resource":  "arn:aws:s3:::test-bucket/*",
 		}},
@@ -856,11 +856,11 @@ func TestCheck_AuthUsersWriteACL(t *testing.T) {
 // TestCheck_WildcardWritePolicyDefault verifies s3:* allowed to everyone
 // produces both read and write findings and warns by default
 func TestCheck_WildcardWritePolicyDefault(t *testing.T) {
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"version": "2012-10-17",
-		"statement": []map[string]interface{}{{
+		"statement": []map[string]any{{
 			"effect":    "Allow",
-			"principal": map[string]interface{}{"AWS": "*"},
+			"principal": map[string]any{"AWS": "*"},
 			"action":    "s3:*",
 			"resource":  "arn:aws:s3:::test-bucket/*",
 		}},
