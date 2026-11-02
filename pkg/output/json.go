@@ -45,13 +45,13 @@ func PrintJSON(report *TestReport, outputFile string) error {
 func PrintJSONWithRemediation(report *TestReport, outputFile string) error {
 	// Create extended report with remediations
 	type ExtendedTestResult struct {
-		TestName    string      `json:"testName"`
-		Status      Status      `json:"status"`
-		Duration    string      `json:"duration"`
-		Error       string      `json:"error,omitempty"`
-		Details     interface{} `json:"details,omitempty"`
-		Remediation interface{} `json:"remediation,omitempty"`
-		Warnings    []string    `json:"warnings,omitempty"`
+		TestName    string   `json:"testName"`
+		Status      Status   `json:"status"`
+		Duration    string   `json:"duration"`
+		Error       string   `json:"error,omitempty"`
+		Details     any      `json:"details,omitempty"`
+		Remediation any      `json:"remediation,omitempty"`
+		Warnings    []string `json:"warnings,omitempty"`
 	}
 
 	type ExtendedTestReport struct {

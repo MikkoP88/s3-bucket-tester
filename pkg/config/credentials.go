@@ -12,10 +12,10 @@ import (
 // precedence over the standard AWS_* ones so a shared AWS environment can be
 // overridden per tool.
 const (
-	envAccessKey     = "S3TESTER_ACCESS_KEY"
-	envSecretKey     = "S3TESTER_SECRET_ACCESS_KEY"
-	envAWSAccessKey  = "AWS_ACCESS_KEY_ID"
-	envAWSSecretKey  = "AWS_SECRET_ACCESS_KEY"
+	envAccessKey    = "S3TESTER_ACCESS_KEY"
+	envSecretKey    = "S3TESTER_SECRET_ACCESS_KEY"
+	envAWSAccessKey = "AWS_ACCESS_KEY_ID"
+	envAWSSecretKey = "AWS_SECRET_ACCESS_KEY"
 )
 
 // ResolveCredentials fills in credentials missing after flag parsing, in

@@ -3,7 +3,6 @@ package remediation
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 // Remediation provides fix suggestions for test failures
@@ -412,31 +411,16 @@ func FormatRemediation(r *Remediation) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("\n  Error: %s\n", r.Error))
-	sb.WriteString(fmt.Sprintf("  Cause: %s\n", r.Cause))
-	sb.WriteString(fmt.Sprintf("  Suggestion: %s", r.Suggestion))
+	fmt.Fprintf(&sb, "\n  Error: %s\n", r.Error)
+	fmt.Fprintf(&sb, "  Cause: %s\n", r.Cause)
+	fmt.Fprintf(&sb, "  Suggestion: %s", r.Suggestion)
 
 	if len(r.Commands) > 0 {
 		sb.WriteString("\n  Commands to try:")
 		for _, cmd := range r.Commands {
-			sb.WriteString(fmt.Sprintf("\n    - %s", cmd))
+			fmt.Fprintf(&sb, "\n    - %s", cmd)
 		}
 	}
 
 	return sb.String()
-}
-
-// GetCertificateWarnings returns warnings for certificate issues
-func GetCertificateWarnings(certValidUntil time.Time, daysUntilExpiry int) []string {
-	var warnings []string
-
-	if daysUntilExpiry < 0 {
-		warnings = append(warnings, "Certificate has expired!")
-	} else if daysUntilExpiry < 7 {
-		warnings = append(warnings, fmt.Sprintf("Certificate expires in %d days! Renew immediately.", daysUntilExpiry))
-	} else if daysUntilExpiry < 30 {
-		warnings = append(warnings, fmt.Sprintf("Certificate expires in %d days. Plan for renewal.", daysUntilExpiry))
-	}
-
-	return warnings
 }

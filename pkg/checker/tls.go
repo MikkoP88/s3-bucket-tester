@@ -123,7 +123,7 @@ func (c *TLSChecker) Check() output.TestResult {
 		Host:        c.Host,
 		Port:        c.Port,
 		Certificate: peerCerts[0], // Primary certificate
-		Verified:    state.VerifiedChains != nil && len(state.VerifiedChains) > 0,
+		Verified:    len(state.VerifiedChains) > 0,
 		TLSVersion:  tlsVersionToString(state.Version),
 		CipherSuite: tls.CipherSuiteName(state.CipherSuite),
 		PeerCerts:   peerCerts,

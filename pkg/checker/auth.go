@@ -136,7 +136,7 @@ func (c *AuthChecker) Check() output.TestResult {
 		bodyStr := string(body)
 
 		// Try to beautify JSON
-		var jsonBody interface{}
+		var jsonBody any
 		if json.Unmarshal(body, &jsonBody) == nil {
 			// Successfully parsed as JSON, format it nicely
 			formatted, err := json.MarshalIndent(jsonBody, "", "  ")

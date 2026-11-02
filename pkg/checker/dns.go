@@ -186,13 +186,13 @@ func ParseHostname(endpoint string) string {
 	endpoint = strings.TrimPrefix(endpoint, "https://")
 
 	// Remove port
-	if idx := strings.Index(endpoint, ":"); idx != -1 {
-		endpoint = endpoint[:idx]
+	if host, _, ok := strings.Cut(endpoint, ":"); ok {
+		endpoint = host
 	}
 
 	// Remove path
-	if idx := strings.Index(endpoint, "/"); idx != -1 {
-		endpoint = endpoint[:idx]
+	if host, _, ok := strings.Cut(endpoint, "/"); ok {
+		endpoint = host
 	}
 
 	return endpoint
@@ -206,12 +206,8 @@ func ParsePort(endpoint string) int {
 	endpoint = strings.TrimPrefix(endpoint, "https://")
 
 	// Extract port from URL
-	if idx := strings.Index(endpoint, ":"); idx != -1 {
-		portStr := endpoint[idx+1:]
-		// Remove path
-		if idx2 := strings.Index(portStr, "/"); idx2 != -1 {
-			portStr = portStr[:idx2]
-		}
+	if _, rest, ok := strings.Cut(endpoint, ":"); ok {
+		portStr, _, _ := strings.Cut(rest, "/")
 		var port int
 		fmt.Sscanf(portStr, "%d", &port)
 		if port > 0 && port <= 65535 {
@@ -228,8 +224,8 @@ func ParsePort(endpoint string) int {
 	}
 
 	// Remove path
-	if idx := strings.Index(endpoint, "/"); idx != -1 {
-		endpoint = endpoint[:idx]
+	if host, _, ok := strings.Cut(endpoint, "/"); ok {
+		endpoint = host
 	}
 
 	// Check if it's an IP address

@@ -44,13 +44,9 @@ func redactAuthorization(value string) string {
 
 	// Mask the access key inside Credential=<key>/<scope>
 	head := parts[0]
-	if idx := strings.Index(head, "Credential="); idx != -1 {
-		scope := head[idx+len("Credential="):]
-		key := scope
-		if slash := strings.Index(scope, "/"); slash != -1 {
-			key = scope[:slash]
-		}
-		head = head[:idx+len("Credential=")] + output.MaskAccessKey(key)
+	if prefix, scope, ok := strings.Cut(head, "Credential="); ok {
+		key, _, _ := strings.Cut(scope, "/")
+		head = prefix + "Credential=" + output.MaskAccessKey(key)
 	}
 	return head + ", " + parts[1] + ", Signature=[REDACTED]"
 }
@@ -144,7 +140,7 @@ func (v *VerboseLogger) LogResponse(resp *http.Response) {
 		bodyStr := string(bodyBytes)
 
 		// Try to beautify JSON
-		var jsonBody interface{}
+		var jsonBody any
 		if json.Unmarshal(bodyBytes, &jsonBody) == nil {
 			// Successfully parsed as JSON, format it nicely
 			formatted, err := json.MarshalIndent(jsonBody, "", "  ")
@@ -176,7 +172,7 @@ func (v *VerboseLogger) LogResponse(resp *http.Response) {
 }
 
 // LogMessage logs a general message
-func (v *VerboseLogger) LogMessage(format string, args ...interface{}) {
+func (v *VerboseLogger) LogMessage(format string, args ...any) {
 	if !v.enabled {
 		return
 	}
@@ -196,7 +192,7 @@ func (v *VerboseLogger) LogSection(title string) {
 // beautifyXML attempts to beautify XML content with proper indentation
 func beautifyXML(data []byte) (string, error) {
 	// First, try to unmarshal to a generic interface to validate XML
-	var v interface{}
+	var v any
 	if err := xml.Unmarshal(data, &v); err != nil {
 		return "", err
 	}
@@ -217,7 +213,7 @@ func beautifyXML(data []byte) (string, error) {
 	result := xmlDecl + string(formatted)
 	if len(result) < len(data)/2 {
 		// If beautification produces significantly shorter result, fall back to original
-		// This happens when xml.MarshalIndent to interface{} loses structure
+		// This happens when xml.MarshalIndent to any loses structure
 		return simpleXMLBeautify(string(data)), nil
 	}
 
@@ -508,14 +504,13 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 	}
 
 	// Add authentication headers
-	if c.AuthType == "sigv4" {
-		err = c.signRequestV4(req)
-		if err != nil {
+	switch c.AuthType {
+	case "sigv4":
+		if err := c.signRequestV4(req); err != nil {
 			return result, fmt.Errorf("failed to sign request: %w", err)
 		}
-	} else if c.AuthType == "sigv2" {
-		err = c.signRequestV2(req)
-		if err != nil {
+	case "sigv2":
+		if err := c.signRequestV2(req); err != nil {
 			return result, fmt.Errorf("failed to sign request: %w", err)
 		}
 	}
@@ -545,7 +540,8 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 	result.ResponseBody = string(bodyBytes)
 
 	// Handle response
-	if resp.StatusCode == http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
 		var policyDoc output.BucketPolicy
 		if err := json.Unmarshal(bodyBytes, &policyDoc); err != nil {
 			return result, fmt.Errorf("failed to parse policy: %w", err)
@@ -558,9 +554,10 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 		// Extract actions, principals, resources
 		for _, stmt := range policyDoc.Statement {
 			// Extract actions based on effect
-			if stmt.Effect == "Allow" {
+			switch stmt.Effect {
+			case "Allow":
 				result.AllowedActions = append(result.AllowedActions, c.extractActions(stmt.Action)...)
-			} else if stmt.Effect == "Deny" {
+			case "Deny":
 				result.DeniedActions = append(result.DeniedActions, c.extractActions(stmt.Action)...)
 			}
 
@@ -579,10 +576,10 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 		}
 
 		return result, nil
-	} else if resp.StatusCode == http.StatusNotFound {
+	case http.StatusNotFound:
 		// No policy exists
 		return result, nil
-	} else if resp.StatusCode == http.StatusForbidden {
+	case http.StatusForbidden:
 		// Access denied
 		var errorResp ErrorResponse
 		if err := xml.Unmarshal(bodyBytes, &errorResp); err == nil {
@@ -613,14 +610,13 @@ func (c *PolicyChecker) getBucketACL(client *http.Client) (output.ACLResult, err
 	}
 
 	// Add authentication headers
-	if c.AuthType == "sigv4" {
-		err = c.signRequestV4(req)
-		if err != nil {
+	switch c.AuthType {
+	case "sigv4":
+		if err := c.signRequestV4(req); err != nil {
 			return result, fmt.Errorf("failed to sign request: %w", err)
 		}
-	} else if c.AuthType == "sigv2" {
-		err = c.signRequestV2(req)
-		if err != nil {
+	case "sigv2":
+		if err := c.signRequestV2(req); err != nil {
 			return result, fmt.Errorf("failed to sign request: %w", err)
 		}
 	}
@@ -650,7 +646,8 @@ func (c *PolicyChecker) getBucketACL(client *http.Client) (output.ACLResult, err
 	result.ResponseBody = string(bodyBytes)
 
 	// Handle response
-	if resp.StatusCode == http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
 		var acl AccessControlPolicy
 		if err := xml.Unmarshal(bodyBytes, &acl); err != nil {
 			return result, fmt.Errorf("failed to parse ACL: %w", err)
@@ -692,7 +689,7 @@ func (c *PolicyChecker) getBucketACL(client *http.Client) (output.ACLResult, err
 		}
 
 		return result, nil
-	} else if resp.StatusCode == http.StatusForbidden {
+	case http.StatusForbidden:
 		// Access denied
 		var errorResp ErrorResponse
 		if err := xml.Unmarshal(bodyBytes, &errorResp); err == nil {
@@ -780,14 +777,14 @@ func isReadAction(action string) bool {
 }
 
 // extractActions extracts actions from policy statement
-func (c *PolicyChecker) extractActions(action interface{}) []string {
+func (c *PolicyChecker) extractActions(action any) []string {
 	var actions []string
 	switch v := action.(type) {
 	case string:
 		actions = append(actions, v)
 	case []string:
 		actions = append(actions, v...)
-	case []interface{}:
+	case []any:
 		for _, a := range v {
 			if str, ok := a.(string); ok {
 				actions = append(actions, str)
@@ -798,14 +795,14 @@ func (c *PolicyChecker) extractActions(action interface{}) []string {
 }
 
 // extractResources extracts resources from policy statement
-func (c *PolicyChecker) extractResources(resource interface{}) []string {
+func (c *PolicyChecker) extractResources(resource any) []string {
 	var resources []string
 	switch v := resource.(type) {
 	case string:
 		resources = append(resources, v)
 	case []string:
 		resources = append(resources, v...)
-	case []interface{}:
+	case []any:
 		for _, r := range v {
 			if str, ok := r.(string); ok {
 				resources = append(resources, str)

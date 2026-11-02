@@ -17,10 +17,10 @@ func fakeEnv(vars map[string]string) func(string) string {
 func TestApplyEnvCredentials_Precedence(t *testing.T) {
 	config := &Config{}
 	config.applyEnvCredentials(fakeEnv(map[string]string{
-		"S3TESTER_ACCESS_KEY":    "tool-access",
+		"S3TESTER_ACCESS_KEY":        "tool-access",
 		"S3TESTER_SECRET_ACCESS_KEY": "tool-secret",
-		"AWS_ACCESS_KEY_ID":      "aws-access",
-		"AWS_SECRET_ACCESS_KEY":  "aws-secret",
+		"AWS_ACCESS_KEY_ID":          "aws-access",
+		"AWS_SECRET_ACCESS_KEY":      "aws-secret",
 	}))
 
 	if config.AccessKey != "tool-access" {

@@ -12,7 +12,7 @@ import (
 
 // formatPrincipalEntry renders "Key (identifier)" for a structured principal
 // object identified by an ID or URI field; returns "" when neither is present.
-func formatPrincipalEntry(key string, m map[string]interface{}) string {
+func formatPrincipalEntry(key string, m map[string]any) string {
 	if id, ok := m["ID"].(string); ok {
 		return fmt.Sprintf("%s (%s)", key, id)
 	}
@@ -26,7 +26,7 @@ func formatPrincipalEntry(key string, m map[string]interface{}) string {
 // original document form (including nested structured entries) when present
 func formatPrincipal(principal Principal) string {
 	// Structured object forms render best from the original encoding
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(principal.raw, &m); err == nil {
 		return formatPrincipalMap(m)
 	}
@@ -39,7 +39,7 @@ func formatPrincipal(principal Principal) string {
 }
 
 // formatPrincipalMap renders a principal object for display
-func formatPrincipalMap(principal map[string]interface{}) string {
+func formatPrincipalMap(principal map[string]any) string {
 	var parts []string
 
 	for key, value := range principal {
@@ -48,13 +48,13 @@ func formatPrincipalMap(principal map[string]interface{}) string {
 			parts = append(parts, v)
 		case []string:
 			parts = append(parts, v...)
-		case []interface{}:
+		case []any:
 			for _, item := range v {
 				if s, ok := item.(string); ok {
 					parts = append(parts, s)
 				}
 			}
-		case map[string]interface{}:
+		case map[string]any:
 			// Structured principal objects (e.g. a Group identified by its
 			// URI), possibly nested one level deeper under a provider key
 			// such as "AWS" (e.g. a CanonicalUser with an ID)
@@ -64,7 +64,7 @@ func formatPrincipalMap(principal map[string]interface{}) string {
 			}
 			for innerKey, innerVal := range v {
 				switch iv := innerVal.(type) {
-				case map[string]interface{}:
+				case map[string]any:
 					if s := formatPrincipalEntry(innerKey, iv); s != "" {
 						parts = append(parts, s)
 					}
@@ -83,13 +83,13 @@ func formatPrincipalMap(principal map[string]interface{}) string {
 }
 
 // formatAction formats an action value for display (can be string or []string)
-func formatAction(action interface{}) string {
+func formatAction(action any) string {
 	switch v := action.(type) {
 	case string:
 		return v
 	case []string:
 		return strings.Join(v, ", ")
-	case []interface{}:
+	case []any:
 		var parts []string
 		for _, item := range v {
 			if s, ok := item.(string); ok {
@@ -103,13 +103,13 @@ func formatAction(action interface{}) string {
 }
 
 // formatResource formats a resource value for display (can be string or []string)
-func formatResource(resource interface{}) string {
+func formatResource(resource any) string {
 	switch v := resource.(type) {
 	case string:
 		return v
 	case []string:
 		return strings.Join(v, ", ")
-	case []interface{}:
+	case []any:
 		var parts []string
 		for _, item := range v {
 			if s, ok := item.(string); ok {
@@ -123,7 +123,7 @@ func formatResource(resource interface{}) string {
 }
 
 // formatCondition formats a condition map for display
-func formatCondition(condition map[string]interface{}) string {
+func formatCondition(condition map[string]any) string {
 	if len(condition) == 0 {
 		return "-"
 	}
@@ -133,7 +133,7 @@ func formatCondition(condition map[string]interface{}) string {
 		switch v := value.(type) {
 		case string:
 			parts = append(parts, fmt.Sprintf("%s: %s", key, v))
-		case map[string]interface{}:
+		case map[string]any:
 			var subParts []string
 			for subKey, subValue := range v {
 				subParts = append(subParts, fmt.Sprintf("%s=%v", subKey, subValue))
@@ -535,7 +535,7 @@ func printSummary(summary TestSummary) {
 }
 
 // statusColor returns the color function for a given status
-func statusColor(status Status) func(a ...interface{}) string {
+func statusColor(status Status) func(a ...any) string {
 	switch status {
 	case StatusPass:
 		return green
@@ -570,7 +570,7 @@ func FormatResponseBody(body string) string {
 	bodyBytes := []byte(body)
 
 	// Try to format as JSON
-	var jsonBody interface{}
+	var jsonBody any
 	if err := json.Unmarshal(bodyBytes, &jsonBody); err == nil {
 		formatted, err := json.MarshalIndent(jsonBody, "", "  ")
 		if err == nil {
@@ -580,7 +580,7 @@ func FormatResponseBody(body string) string {
 
 	// Try to format as XML
 	if strings.HasPrefix(strings.TrimSpace(body), "<") {
-		var decodedXML interface{}
+		var decodedXML any
 		if err := xml.Unmarshal(bodyBytes, &decodedXML); err == nil {
 			formatted, err := xml.MarshalIndent(decodedXML, "", "  ")
 			if err == nil {

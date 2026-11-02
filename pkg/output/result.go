@@ -24,7 +24,7 @@ type TestResult struct {
 	Duration time.Duration `json:"duration"`
 	Error    string        `json:"error,omitempty"`
 	Warnings []string      `json:"warnings,omitempty"`
-	Details  interface{}   `json:"details,omitempty"`
+	Details  any           `json:"details,omitempty"`
 }
 
 // DNSResult contains DNS resolution details
@@ -142,7 +142,7 @@ func (p *Principal) UnmarshalJSON(data []byte) error {
 	}
 
 	// Array-of-objects form: [{"AWS": "..."}, {"Service": "..."}]
-	var entries []map[string]interface{}
+	var entries []map[string]any
 	if err := json.Unmarshal(data, &entries); err == nil {
 		for _, entry := range entries {
 			p.absorbPrincipal(entry)
@@ -151,7 +151,7 @@ func (p *Principal) UnmarshalJSON(data []byte) error {
 	}
 
 	// Object form: {"AWS": "*"} or {"AWS": {"CanonicalUser": {...}}}
-	var entry map[string]interface{}
+	var entry map[string]any
 	if err := json.Unmarshal(data, &entry); err == nil {
 		p.absorbPrincipal(entry)
 		return p.requireEntries()
@@ -168,7 +168,7 @@ func (p Principal) MarshalJSON() ([]byte, error) {
 	if p.Wildcard {
 		return []byte(`"*"`), nil
 	}
-	out := make(map[string]interface{}, len(p.Values))
+	out := make(map[string]any, len(p.Values))
 	for key, ids := range p.Values {
 		if len(ids) == 1 {
 			out[key] = ids[0]
@@ -181,7 +181,7 @@ func (p Principal) MarshalJSON() ([]byte, error) {
 
 // absorbPrincipal merges one principal object into Values; nested
 // structured entries set the structured marker and live only in raw
-func (p *Principal) absorbPrincipal(entry map[string]interface{}) {
+func (p *Principal) absorbPrincipal(entry map[string]any) {
 	if p.Values == nil {
 		p.Values = map[string][]string{}
 	}
@@ -189,13 +189,13 @@ func (p *Principal) absorbPrincipal(entry map[string]interface{}) {
 		switch v := value.(type) {
 		case string:
 			p.addPrincipalValue(key, v)
-		case []interface{}:
+		case []any:
 			for _, item := range v {
 				if s, ok := item.(string); ok {
 					p.addPrincipalValue(key, s)
 				}
 			}
-		case map[string]interface{}:
+		case map[string]any:
 			p.structured = true
 		}
 	}
@@ -245,12 +245,12 @@ func (p Principal) List() []string {
 
 // Statement represents a single statement in a bucket policy
 type Statement struct {
-	Sid       string                 `json:"sid,omitempty"`
-	Effect    string                 `json:"effect"` // "Allow" or "Deny"
-	Principal Principal              `json:"principal"`
-	Action    interface{}            `json:"action"`   // string or []string
-	Resource  interface{}            `json:"resource"` // string or []string
-	Condition map[string]interface{} `json:"condition,omitempty"`
+	Sid       string         `json:"sid,omitempty"`
+	Effect    string         `json:"effect"` // "Allow" or "Deny"
+	Principal Principal      `json:"principal"`
+	Action    any            `json:"action"`   // string or []string
+	Resource  any            `json:"resource"` // string or []string
+	Condition map[string]any `json:"condition,omitempty"`
 }
 
 // ACLResult contains bucket ACL check details
@@ -312,24 +312,24 @@ type Config struct {
 	Region   string `json:"region"`
 	// Credentials are never serialized: AccessKey is written only in masked
 	// form via AccessKeyMasked, SecretKey not at all.
-	AccessKey       string `json:"-"`
-	SecretKey       string `json:"-"`
-	AccessKeyMasked string `json:"accessKey,omitempty"`
-	AuthType        string `json:"authType"`
-	Port            int    `json:"port"`
-	Insecure        bool   `json:"insecure"`
-	Timeout         int    `json:"timeout"`
-	OutputFormat    string `json:"outputFormat"`
-	OutputFile      string `json:"outputFile"`
-	FollowRedirect  bool   `json:"followRedirect"`
-	MaxRedirects    int    `json:"maxRedirects"`
-	Verbose         bool   `json:"verbose"`
-	PathStyle       bool   `json:"pathStyle"`
-	CheckPolicy     bool   `json:"checkPolicy"`
-	FailOnPublicWrite bool `json:"failOnPublicWrite"`
-	FailOnPublicRead  bool `json:"failOnPublicRead"`
-	Provider        string `json:"provider"`
-	DetectedProvider string `json:"detectedProvider"`
+	AccessKey         string `json:"-"`
+	SecretKey         string `json:"-"`
+	AccessKeyMasked   string `json:"accessKey,omitempty"`
+	AuthType          string `json:"authType"`
+	Port              int    `json:"port"`
+	Insecure          bool   `json:"insecure"`
+	Timeout           int    `json:"timeout"`
+	OutputFormat      string `json:"outputFormat"`
+	OutputFile        string `json:"outputFile"`
+	FollowRedirect    bool   `json:"followRedirect"`
+	MaxRedirects      int    `json:"maxRedirects"`
+	Verbose           bool   `json:"verbose"`
+	PathStyle         bool   `json:"pathStyle"`
+	CheckPolicy       bool   `json:"checkPolicy"`
+	FailOnPublicWrite bool   `json:"failOnPublicWrite"`
+	FailOnPublicRead  bool   `json:"failOnPublicRead"`
+	Provider          string `json:"provider"`
+	DetectedProvider  string `json:"detectedProvider"`
 
 	ProviderCapabilities *ProviderCapabilities `json:"providerCapabilities,omitempty"`
 }
