@@ -191,6 +191,12 @@ OPTIONAL FLAGS:
     --help, -h             Show this help message
     --version              Show version information
 
+EXIT CODES:
+    0    All tests passed (warnings allowed unless --strict is set)
+    1    At least one test failed, or (with --strict) reported a warning
+    2    Configuration error
+    3    Internal error, e.g. the report file could not be written
+
 EXAMPLES:
     # Using built-in provider (AWS)
     s3tester --endpoint aws --region us-east-1 \

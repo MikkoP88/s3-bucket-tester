@@ -53,6 +53,15 @@ A cross-platform CLI tool built in Go to test S3-compatible storage providers (A
 - **Redirects are off by default.** Signed requests are never silently
   redirected; opting in with `--follow-redirects` restricts targets to HTTPS
   on the original host or its subdomains.
+- **A PASS means what it says.** The authentication check passes only on an
+  HTTP 200; unexpected 2xx responses warn, and redirects or errors fail.
+  TLS checks fail on expired or not-yet-valid certificates even with
+  `--insecure`, and an unverified chain warns instead of passing.
+- **Public access is reported.** With `--check-policy`, public or
+  broad-access grants (AllUsers/AuthenticatedUsers read or write, and
+  wildcard-principal policies) produce WARN findings; pass
+  `--fail-on-public-read`/`--fail-on-public-write` to treat them as
+  failures.
 
 ## License
 
@@ -404,6 +413,9 @@ s3tester --endpoint aws --bucket my-test-bucket
 | `--max-redirects` | Maximum redirects to follow | `10` |
 | `--verbose` | Enable verbose output | `false` |
 | `--check-policy` | Enable bucket policy and ACL check (requires s3:GetBucketPolicy and s3:GetBucketAcl permissions) | `false` |
+| `--fail-on-public-read` | Treat public read access findings as failures (with `--check-policy`) | `false` |
+| `--fail-on-public-write` | Treat public write access findings as failures (with `--check-policy`) | `false` |
+| `--strict` | Exit with code 1 when any test reports WARN | `false` |
 | `--help, -h` | Show help message | - |
 | `--version` | Show version information | - |
 
@@ -457,6 +469,12 @@ To retrieve bucket policy and ACL information, your AWS credentials must have th
 - `s3:GetBucketAcl` - Required to retrieve the bucket ACL
 
 If these permissions are not granted, the check will return a **WARN** status with an "AccessDenied" error message.
+
+Public or broad-access grants are reported as findings: AllUsers or
+AuthenticatedUsers grants for READ, WRITE or FULL_CONTROL, and
+wildcard-principal `Allow` statements on read or write actions. Findings
+produce a **WARN** by default; pass `--fail-on-public-write` or
+`--fail-on-public-read` to treat the corresponding findings as failures.
 
 ### Example Output
 
@@ -773,10 +791,10 @@ Use `--output-file results.json` to generate JSON output.
 
 | Code | Description | When Returned |
 |------|-------------|---------------|
-| 0 | All tests passed | All 4 tests completed successfully |
-| 1 | One or more tests failed | At least one test failed |
+| 0 | All tests passed | All tests passed (warnings allowed without `--strict`) |
+| 1 | One or more tests failed | At least one test failed, or any test warned with `--strict` |
 | 2 | Configuration error | Missing required flags or invalid configuration |
-| 3 | Unexpected error | Internal error or unexpected condition |
+| 3 | Report error | The JSON report file could not be written |
 
 ### Using Exit Codes in Scripts
 

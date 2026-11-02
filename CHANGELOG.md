@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-interactive runs never block on the prompt.
 - Masked access key (`accessKey`, e.g. `AKIA…`) in JSON reports as a replacement for
   the removed plaintext fields.
+- `--fail-on-public-read` / `--fail-on-public-write` flags: escalate public-access
+  findings from WARN to FAIL (with `--check-policy`).
+- `--strict` flag: exit code 1 when any test reports WARN.
+- `warnings` field on test results, printed in console output.
 
 ### Changed
 
@@ -31,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Raise Go toolchain requirement to 1.26 (`golang.org/x/term` dependency); upgrade
   `golang.org/x/sys` v0.15.0 → v0.49.0, remediating GO-2026-5024.
 - `Validate()` errors and `--help` document all credential sources.
+- **Security:** the authentication check passes only on an HTTP 200 response;
+  unexpected 2xx responses warn, and redirects and 4xx/5xx responses fail.
+- **Security:** TLS checks fail on expired or not-yet-valid certificates even
+  with `--insecure`; unverified chains warn instead of passing.
+- **Security:** the policy/ACL check reports public-access findings (AllUsers /
+  AuthenticatedUsers grants including FULL_CONTROL, wildcard-principal Allow
+  statements) as WARN; PASS requires zero findings.
+- Exit code 3 now signals report-write failures (previously only a console warning).
 
 ### Fixed
 
@@ -45,6 +57,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Console output renders structured principals (`CanonicalUser`, group URIs)
   instead of falling back to `*`.
 - Non-constant format string in an `fmt.Errorf` call replaced with `errors.New`.
+- Bucket policy parsing accepts every AWS `Principal` encoding (wildcard string,
+  object, array, nested structured forms); a bare wildcard no longer fails the
+  whole document parse, and unparseable principals error instead of looking safe.
+- TLS fallback certificate retrieval dials with the configured timeout and a
+  TLS 1.2 floor instead of an unbounded TLS 1.0-capable connection; an empty
+  peer certificate list fails cleanly instead of panicking.
+- Bucket URL construction goes through `net/url`: `http://` endpoints, explicit
+  ports and endpoint path prefixes are preserved, and TLS dials use IPv6-safe
+  host/port formatting.
 
 ## [1.1.1] - 2026-02-16
 
