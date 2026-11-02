@@ -118,11 +118,11 @@ func (v *VerboseLogger) LogResponse(resp *http.Response) {
 	fmt.Println("HTTP RESPONSE")
 	fmt.Println(strings.Repeat("=", 70))
 
-	// Read and store body for logging
+	// Read and store body for logging (bounded for display)
 	var bodyBytes []byte
 	if resp.Body != nil {
 		var err error
-		bodyBytes, err = io.ReadAll(resp.Body)
+		bodyBytes, err = io.ReadAll(io.LimitReader(resp.Body, maxPolicyBodySize))
 		if err != nil {
 			fmt.Printf("Error reading response body: %v\n", err)
 		}
@@ -521,7 +521,7 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 	c.verbose.LogResponse(resp)
 
 	// Read response body
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readLimited(resp.Body, maxPolicyBodySize)
 	if err != nil {
 		return result, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -632,7 +632,7 @@ func (c *PolicyChecker) getBucketACL(client *http.Client) (output.ACLResult, err
 	c.verbose.LogResponse(resp)
 
 	// Read response body
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readLimited(resp.Body, maxPolicyBodySize)
 	if err != nil {
 		return result, fmt.Errorf("failed to read response body: %w", err)
 	}

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -127,8 +126,12 @@ func (c *AuthChecker) Check() output.TestResult {
 	// Log the response
 	c.verbose.LogResponse(resp)
 
-	// Read response body
-	body, _ := io.ReadAll(resp.Body)
+	// Read response body (bounded; oversized bodies are treated as empty)
+	body, readErr := readLimited(resp.Body, maxAuthBodySize)
+	if readErr != nil {
+		c.verbose.LogMessage("Failed to read response body: %v", readErr)
+		body = nil
+	}
 
 	// Log response body if present and verbose
 	if c.verbose != nil && c.verbose.enabled && len(body) > 0 {

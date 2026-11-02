@@ -5,9 +5,64 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/s3-bucket-tester/s3tester/pkg/output"
 )
+
+// TestReadLimited verifies the bounded reader: inputs at or under the limit
+// pass, larger inputs error
+func TestReadLimited(t *testing.T) {
+	small := strings.Repeat("a", 100)
+	data, err := readLimited(strings.NewReader(small), 128)
+	if err != nil || string(data) != small {
+		t.Errorf("expected small input to pass, got data=%d err=%v", len(data), err)
+	}
+
+	exact := strings.Repeat("b", 128)
+	data, err = readLimited(strings.NewReader(exact), 128)
+	if err != nil || len(data) != 128 {
+		t.Errorf("expected limit-sized input to pass, got len=%d err=%v", len(data), err)
+	}
+
+	big := strings.Repeat("c", 129)
+	_, err = readLimited(strings.NewReader(big), 128)
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Errorf("expected oversized input to error, got %v", err)
+	}
+}
+
+// TestGetBucketPolicy_OversizedBody verifies policy responses beyond the
+// size limit are rejected instead of being read into memory unbounded
+func TestGetBucketPolicy_OversizedBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(make([]byte, 2*maxPolicyBodySize)); err != nil {
+			t.Errorf("failed to write oversized body: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	checker := NewPolicyChecker(output.Config{
+		Endpoint:  server.URL,
+		Bucket:    "test-bucket",
+		AccessKey: "test-key",
+		SecretKey: "test-secret",
+		Region:    "us-east-1",
+		AuthType:  "sigv4",
+		PathStyle: true,
+		Timeout:   5,
+	})
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	result, err := checker.getBucketPolicy(client)
+	if err == nil {
+		t.Fatalf("expected oversized policy body to error, got result %+v", result)
+	}
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Errorf("expected size-limit error, got: %v", err)
+	}
+}
 
 // TestValidateRedirect verifies the redirect target policy: HTTPS only,
 // original host or its subdomains only

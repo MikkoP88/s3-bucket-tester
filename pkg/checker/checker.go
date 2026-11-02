@@ -3,12 +3,33 @@ package checker
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/s3-bucket-tester/s3tester/pkg/output"
 )
+
+// Response body size limits protect against oversized or hostile responses
+// exhausting memory.
+const (
+	maxAuthBodySize   = 64 << 10 // 64 KiB for auth check bodies
+	maxPolicyBodySize = 1 << 20  // 1 MiB for policy/ACL documents
+)
+
+// readLimited reads at most max bytes from r and reports an error when the
+// input exceeds max, so oversized responses cannot exhaust memory.
+func readLimited(r io.Reader, max int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > max {
+		return nil, fmt.Errorf("response body exceeds %d byte limit", max)
+	}
+	return data, nil
+}
 
 // Checker defines the interface for all test checkers
 type Checker interface {
