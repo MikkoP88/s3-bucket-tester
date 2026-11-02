@@ -31,6 +31,10 @@ type AuthChecker struct {
 	verbose   *VerboseLogger
 }
 
+// timeNow is the clock used by request signing. Tests replace it with a
+// fixed value to verify signatures against published AWS test vectors.
+var timeNow = time.Now
+
 // NewAuthChecker creates a new auth checker
 func NewAuthChecker(config output.Config) *AuthChecker {
 	return &AuthChecker{
@@ -271,7 +275,7 @@ func (c *AuthChecker) createRequest() (*http.Request, error) {
 	// Set headers
 	req.Header.Set("Host", hostHeader)
 	req.Header.Set("User-Agent", "s3-bucket-tester/1.0")
-	req.Header.Set("Date", time.Now().UTC().Format(time.RFC1123))
+	req.Header.Set("Date", timeNow().UTC().Format(time.RFC1123))
 
 	return req, nil
 }
@@ -279,7 +283,7 @@ func (c *AuthChecker) createRequest() (*http.Request, error) {
 // addSigV4Auth adds AWS Signature Version 4 authentication
 func (c *AuthChecker) addSigV4Auth(req *http.Request) error {
 	// Get current time
-	now := time.Now().UTC()
+	now := timeNow().UTC()
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
 
@@ -333,7 +337,7 @@ func (c *AuthChecker) addSigV4Auth(req *http.Request) error {
 // addSigV2Auth adds AWS Signature Version 2 authentication
 func (c *AuthChecker) addSigV2Auth(req *http.Request) error {
 	// Get current time
-	now := time.Now().UTC()
+	now := timeNow().UTC()
 
 	// Set headers
 	req.Header.Set("Date", now.Format(time.RFC1123))
