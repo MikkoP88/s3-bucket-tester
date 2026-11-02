@@ -1,3 +1,4 @@
+// Package remediation maps failed checks to actionable fix suggestions.
 package remediation
 
 import (

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -208,8 +209,8 @@ func ParsePort(endpoint string) int {
 	// Extract port from URL
 	if _, rest, ok := strings.Cut(endpoint, ":"); ok {
 		portStr, _, _ := strings.Cut(rest, "/")
-		var port int
-		fmt.Sscanf(portStr, "%d", &port)
+		// An unparsable port falls through to the defaults below
+		port, _ := strconv.Atoi(portStr)
 		if port > 0 && port <= 65535 {
 			return port
 		}

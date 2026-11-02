@@ -1,9 +1,12 @@
+// Package output defines the report data model and renders test results to
+// the console and to JSON report files.
 package output
 
 import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -222,10 +225,8 @@ func (p Principal) IsWildcard() bool {
 		return true
 	}
 	for _, ids := range p.Values {
-		for _, id := range ids {
-			if id == "*" {
-				return true
-			}
+		if slices.Contains(ids, "*") {
+			return true
 		}
 	}
 	return false

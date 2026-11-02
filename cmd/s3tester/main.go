@@ -1,3 +1,5 @@
+// Command s3tester runs connectivity, TLS, authentication, and optional
+// policy/ACL checks against an S3-compatible endpoint.
 package main
 
 import (

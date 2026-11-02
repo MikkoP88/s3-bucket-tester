@@ -1,3 +1,5 @@
+// Package config handles CLI flag parsing, credential resolution, provider
+// detection, and validation of the resulting run configuration.
 package config
 
 import (
@@ -54,7 +56,8 @@ type ProviderEndpoint struct {
 	Description string
 }
 
-// Provider capabilities based on S3 compatibility
+// ProviderCapabilitiesMap describes per-provider policy/ACL support and
+// addressing-style capabilities.
 var ProviderCapabilitiesMap = map[string]*ProviderCapabilities{
 	"aws": {
 		Name:               "AWS S3",
@@ -154,7 +157,7 @@ var ProviderCapabilitiesMap = map[string]*ProviderCapabilities{
 	},
 }
 
-// Built-in providers
+// Providers maps built-in provider shortcut names to endpoint templates.
 var Providers = map[string]ProviderEndpoint{
 	"aws": {
 		Template:    "<bucket>.s3.<region>.amazonaws.com",

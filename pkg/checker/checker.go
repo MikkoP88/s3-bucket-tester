@@ -1,3 +1,6 @@
+// Package checker implements the DNS, TCP, TLS, authentication, and
+// bucket-policy checks run against S3-compatible endpoints, including the
+// shared SigV4/SigV2 request signer.
 package checker
 
 import (
