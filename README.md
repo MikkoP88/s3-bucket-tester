@@ -5,6 +5,7 @@ A cross-platform CLI tool built in Go to test S3-compatible storage providers (A
 ## Table of Contents
 
 - [Features](#features)
+- [Security](#security)
 - [License](#license)
 - [Validated Providers](#validated-providers)
 - [Installation](#installation)
@@ -35,6 +36,20 @@ A cross-platform CLI tool built in Go to test S3-compatible storage providers (A
 - **JSON output**: Optional machine-readable output format
 - **Remediation suggestions**: Automatic fix suggestions for failed tests
 - **Policy & ACL check**: Optional bucket policy and ACL permissions analysis
+
+## Security
+
+- **Credentials are never written to reports.** JSON reports contain the
+  access key only in masked form (e.g. `AKIA…`); the secret key is never
+  serialized in any form.
+- **Report files are owner-only.** JSON reports are written with `0600`
+  permissions, and pre-existing report files are tightened on rewrite.
+- **Prefer environment variables or the prompt over flags.** Credentials on
+  the command line can leak through shell history and process listings. See
+  [Credential Sources](#credential-sources).
+- **Verbose logs are redacted.** `--verbose` masks `Authorization` headers to
+  the signing algorithm plus a masked credential identifier, and redacts
+  SigV2/SigV4 authentication parameters from logged URLs.
 
 ## License
 
@@ -256,6 +271,10 @@ s3tester \
   --verbose
 ```
 
+Verbose output masks authentication material: `Authorization` headers are
+reduced to the signing algorithm plus a masked credential identifier, and
+SigV2/SigV4 authentication parameters in URLs are redacted.
+
 ## Addressing Styles
 
 S3-compatible storage providers support two different addressing styles for bucket access:
@@ -336,8 +355,29 @@ s3tester \
 |------|-------------|---------|
 | `--endpoint` | S3 endpoint URL or built-in provider shortcut | `https://s3.amazonaws.com` |
 | `--bucket` | Bucket name to test | `my-test-bucket` |
-| `--access-key` | Access key ID | `AKIAIOSFODNN7EXAMPLE` |
-| `--secret-key` | Secret access key | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `--access-key` | Access key ID (see [Credential Sources](#credential-sources)) | `AKIAIOSFODNN7EXAMPLE` |
+| `--secret-key` | Secret access key (see [Credential Sources](#credential-sources)) | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+
+#### Credential Sources
+
+Credentials resolve in this order; the first source that provides a value wins:
+
+1. `--access-key` / `--secret-key` flags
+2. `S3TESTER_ACCESS_KEY` / `S3TESTER_SECRET_ACCESS_KEY` environment variables
+3. `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` environment variables
+4. Hidden interactive prompt (only when stdin is a terminal — CI and piped runs never block)
+
+```bash
+# Environment variables (recommended over flags)
+export S3TESTER_ACCESS_KEY="your-access-key"
+export S3TESTER_SECRET_ACCESS_KEY="your-secret-key"
+s3tester --endpoint aws --bucket my-test-bucket
+
+# Or rely on a standard AWS environment
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
+s3tester --endpoint aws --bucket my-test-bucket
+```
 
 ### Addressing Style Flags
 
