@@ -1,10 +1,6 @@
 package checker
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -289,163 +285,22 @@ func (c *AuthChecker) createRequest() (*http.Request, error) {
 	return req, nil
 }
 
+// signer returns the shared request signer for this checker
+func (c *AuthChecker) signer() Signer {
+	return Signer{AccessKey: c.AccessKey, SecretKey: c.SecretKey, Region: c.Region}
+}
+
 // addSigV4Auth adds AWS Signature Version 4 authentication
 func (c *AuthChecker) addSigV4Auth(req *http.Request) error {
-	// Get current time
-	now := timeNow().UTC()
-	amzDate := now.Format("20060102T150405Z")
-	dateStamp := now.Format("20060102")
-
-	// Set headers
-	req.Header.Set("X-Amz-Date", amzDate)
-	req.Header.Set("X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD")
-
-	// Create canonical request
-	// Use the actual request path for canonical URI (important for path-style addressing)
-	canonicalURI := req.URL.Path
-	if canonicalURI == "" {
-		canonicalURI = "/"
-	}
-	canonicalQueryString := ""
-	canonicalHeaders := fmt.Sprintf("host:%s\nx-amz-content-sha256:UNSIGNED-PAYLOAD\nx-amz-date:%s\n", req.Host, amzDate)
-	signedHeaders := "host;x-amz-content-sha256;x-amz-date"
-
-	payloadHash := "UNSIGNED-PAYLOAD"
-
-	canonicalRequest := fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s",
-		req.Method,
-		canonicalURI,
-		canonicalQueryString,
-		canonicalHeaders,
-		signedHeaders,
-		payloadHash)
-
-	// Create string to sign
-	credentialScope := fmt.Sprintf("%s/%s/s3/aws4_request", dateStamp, c.Region)
-	stringToSign := fmt.Sprintf("AWS4-HMAC-SHA256\n%s\n%s\n%s",
-		amzDate,
-		credentialScope,
-		hashSHA256(canonicalRequest))
-
-	// Calculate signature
-	signingKey := c.getSignatureKey(dateStamp)
-	signature := hmacSHA256(signingKey, stringToSign)
-
-	// Create authorization header
-	authorizationHeader := fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
-		c.AccessKey,
-		credentialScope,
-		signedHeaders,
-		hex.EncodeToString(signature))
-
-	req.Header.Set("Authorization", authorizationHeader)
-
-	return nil
+	return c.signer().SignV4(req, timeNow())
 }
 
-// addSigV2Auth adds AWS Signature Version 2 authentication
+// addSigV2Auth adds AWS Signature Version 2 query authentication
 func (c *AuthChecker) addSigV2Auth(req *http.Request) error {
-	// Get current time
-	now := timeNow().UTC()
-
-	// Set headers
-	req.Header.Set("Date", now.Format(time.RFC1123))
-
-	// Create canonical string
-	canonicalString := c.createSigV2CanonicalString(req)
-
-	// Calculate signature
-	signature := hmacSHA256([]byte(c.SecretKey), canonicalString)
-
-	// Add signature to query string
-	if req.URL.RawQuery == "" {
-		req.URL.RawQuery = fmt.Sprintf("AWSAccessKeyId=%s&Signature=%s&Expires=%d",
-			url.QueryEscape(c.AccessKey),
-			url.QueryEscape(hex.EncodeToString(signature)),
-			now.Add(15*time.Minute).Unix())
-	} else {
-		req.URL.RawQuery = fmt.Sprintf("%s&AWSAccessKeyId=%s&Signature=%s&Expires=%d",
-			req.URL.RawQuery,
-			url.QueryEscape(c.AccessKey),
-			url.QueryEscape(hex.EncodeToString(signature)),
-			now.Add(15*time.Minute).Unix())
-	}
-
-	return nil
-}
-
-// createSigV2CanonicalString creates the canonical string for SigV2
-func (c *AuthChecker) createSigV2CanonicalString(req *http.Request) string {
-	var buf bytes.Buffer
-
-	// HTTP Verb
-	buf.WriteString(req.Method)
-	buf.WriteString("\n")
-
-	// Content-MD5 (empty if not present)
-	buf.WriteString("\n")
-
-	// Content-Type (empty if not present)
-	buf.WriteString("\n")
-
-	// Date
-	buf.WriteString(req.Header.Get("Date"))
-	buf.WriteString("\n")
-
-	// CanonicalizedResource
-	// For SigV2, the resource path should include the bucket
-	canonicalizedResource := c.getCanonicalizedResource(req)
-	buf.WriteString(canonicalizedResource)
-
-	return buf.String()
-}
-
-// getCanonicalizedResource returns the canonicalized resource for SigV2
-func (c *AuthChecker) getCanonicalizedResource(req *http.Request) string {
-	var buf bytes.Buffer
-
-	// For path-style addressing, the path already includes /bucket
-	// For virtual-hosted addressing, we need to prepend /bucket
-	if c.PathStyle {
-		buf.WriteString(req.URL.Path)
-		if req.URL.Path == "" {
-			buf.WriteString("/")
-		}
-	} else {
-		// Virtual-hosted style: prepend /bucket to the path
-		buf.WriteString("/")
-		buf.WriteString(c.Bucket)
-		if req.URL.Path != "" && req.URL.Path != "/" {
-			buf.WriteString(req.URL.Path)
-		}
-	}
-
-	// Add sub-resources if any
-	// Note: For HEAD request to check bucket existence, we typically don't have sub-resources
-
-	return buf.String()
-}
-
-// getSignatureKey derives the signing key for SigV4
-func (c *AuthChecker) getSignatureKey(dateStamp string) []byte {
-	kDate := hmacSHA256([]byte("AWS4"+c.SecretKey), dateStamp)
-	kRegion := hmacSHA256(kDate, c.Region)
-	kService := hmacSHA256(kRegion, "s3")
-	kSigning := hmacSHA256(kService, "aws4_request")
-	return kSigning
-}
-
-// hashSHA256 returns the SHA256 hash of the input
-func hashSHA256(input string) string {
-	hash := sha256.Sum256([]byte(input))
-	return hex.EncodeToString(hash[:])
-}
-
-// hmacSHA256 returns the HMAC-SHA256 of the input with the key
-func hmacSHA256(key []byte, input string) []byte {
-	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(input))
-	return mac.Sum(nil)
+	now := timeNow()
+	s := c.signer()
+	resource := s.BuildCanonicalResource(req, c.Bucket, c.PathStyle)
+	return s.SignV2Query(req, resource, now.Add(15*time.Minute))
 }
 
 // detectProvider attempts to detect the S3 provider

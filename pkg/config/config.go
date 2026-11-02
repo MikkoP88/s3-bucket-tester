@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"net"
 	"net/url"
 	"strings"
 
@@ -446,62 +445,6 @@ func (c *Config) applyAddressingStyle(endpoint string) string {
 	}
 
 	return endpoint
-}
-
-// ParseHostname extracts hostname from endpoint URL
-func ParseHostname(endpoint string) string {
-	// Remove protocol prefix
-	endpoint = strings.TrimPrefix(endpoint, "http://")
-	endpoint = strings.TrimPrefix(endpoint, "https://")
-
-	// Remove port
-	if idx := strings.Index(endpoint, ":"); idx != -1 {
-		endpoint = endpoint[:idx]
-	}
-
-	// Remove path
-	if idx := strings.Index(endpoint, "/"); idx != -1 {
-		endpoint = endpoint[:idx]
-	}
-
-	return endpoint
-}
-
-// ParsePort extracts port from endpoint URL
-func ParsePort(endpoint string) int {
-	// Remove protocol prefix first
-	originalEndpoint := endpoint
-	endpoint = strings.TrimPrefix(endpoint, "http://")
-	endpoint = strings.TrimPrefix(endpoint, "https://")
-
-	// Extract port from URL
-	if idx := strings.Index(endpoint, ":"); idx != -1 {
-		portStr := endpoint[idx+1:]
-		// Remove path
-		if idx2 := strings.Index(portStr, "/"); idx2 != -1 {
-			portStr = portStr[:idx2]
-		}
-		var port int
-		fmt.Sscanf(portStr, "%d", &port)
-		if port > 0 && port <= 65535 {
-			return port
-		}
-	}
-
-	// Default ports based on protocol
-	if strings.HasPrefix(originalEndpoint, "https://") {
-		return 443
-	}
-	if strings.HasPrefix(originalEndpoint, "http://") {
-		return 80
-	}
-
-	// Check if it's an IP address
-	if net.ParseIP(endpoint) != nil {
-		return 443 // Default to HTTPS for IPs
-	}
-
-	return 443 // Default to HTTPS
 }
 
 // ToOutputConfig converts config to output config
