@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Security:** JSON reports no longer serialize credentials. The secret key is never
   written; the access key appears only in masked form.
+- **Security:** HTTP redirects are no longer followed by default. Opting in with
+  `--follow-redirects` restricts targets to HTTPS on the original host or its
+  subdomains, preventing signed-request redirection.
 - **Security:** Report files are written with owner-only permissions (`0600`), and
   pre-existing report files are tightened on rewrite.
 - **Security:** Verbose logging no longer prints authentication material.

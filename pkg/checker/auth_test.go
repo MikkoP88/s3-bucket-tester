@@ -1,7 +1,9 @@
 package checker
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,6 +31,19 @@ func authTestConfig(serverURL string, mutate func(*output.Config)) output.Config
 		mutate(&config)
 	}
 	return config
+}
+
+// authTLSTestServer starts an HTTPS test server with the given handler and
+// a self-signed certificate valid for 127.0.0.1, returning its URL. Use with
+// Insecure: true in the config.
+func authTLSTestServer(t *testing.T, handler http.Handler) string {
+	t.Helper()
+	cert, _, _ := generateTestCert(t, validTLSCertTemplate("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}))
+	server := httptest.NewUnstartedServer(handler)
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{cert}}
+	server.StartTLS()
+	t.Cleanup(server.Close)
+	return server.URL
 }
 
 // s3ErrorXML returns an S3-style XML error body.
@@ -303,11 +318,12 @@ func TestAuthCheck_VirtualHosted(t *testing.T) {
 	}
 }
 
-// TestAuthCheck_RedirectHandling tests that redirects are followed when enabled
+// TestAuthCheck_RedirectHandling tests that HTTPS redirects on the same host
+// are followed when enabled
 func TestAuthCheck_RedirectHandling(t *testing.T) {
 	finalHit := false
 	var mu sync.Mutex
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	serverURL := authTLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/final" {
 			http.Redirect(w, r, "/final", http.StatusMovedPermanently)
 			return
@@ -317,9 +333,9 @@ func TestAuthCheck_RedirectHandling(t *testing.T) {
 		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
 
-	checker := NewAuthChecker(authTestConfig(server.URL, func(c *output.Config) {
+	checker := NewAuthChecker(authTestConfig(serverURL, func(c *output.Config) {
+		c.Insecure = true
 		c.FollowRedirect = true
 		c.MaxRedirects = 3
 	}))
@@ -337,12 +353,12 @@ func TestAuthCheck_RedirectHandling(t *testing.T) {
 
 // TestAuthCheck_MaxRedirects tests maximum redirects enforcement
 func TestAuthCheck_MaxRedirects(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	serverURL := authTLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/loop", http.StatusFound)
 	}))
-	defer server.Close()
 
-	checker := NewAuthChecker(authTestConfig(server.URL, func(c *output.Config) {
+	checker := NewAuthChecker(authTestConfig(serverURL, func(c *output.Config) {
+		c.Insecure = true
 		c.FollowRedirect = true
 		c.MaxRedirects = 2
 	}))
@@ -867,7 +883,7 @@ func TestAuthCheck_CustomTimeout(t *testing.T) {
 func TestAuthCheck_FollowRedirects(t *testing.T) {
 	redirects := 0
 	var mu sync.Mutex
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	serverURL := authTLSTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/final" {
 			mu.Lock()
 			redirects++
@@ -877,9 +893,9 @@ func TestAuthCheck_FollowRedirects(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
 
-	checker := NewAuthChecker(authTestConfig(server.URL, func(c *output.Config) {
+	checker := NewAuthChecker(authTestConfig(serverURL, func(c *output.Config) {
+		c.Insecure = true
 		c.FollowRedirect = true
 		c.MaxRedirects = 5
 	}))

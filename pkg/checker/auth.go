@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -67,25 +66,8 @@ func (c *AuthChecker) Check() output.TestResult {
 		Duration: time.Since(startTime),
 	}
 
-	// Create HTTP client with custom transport for insecure TLS
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: c.Config.Insecure,
-		},
-	}
-	client := &http.Client{
-		Timeout:   time.Duration(c.Config.Timeout) * time.Second,
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if !c.Config.FollowRedirect {
-				return http.ErrUseLastResponse
-			}
-			if len(via) >= c.Config.MaxRedirects {
-				return fmt.Errorf("stopped after %d redirects", c.Config.MaxRedirects)
-			}
-			return nil
-		},
-	}
+	// Create HTTP client with shared transport and redirect policy
+	client := newSecureHTTPClient(c.Config)
 
 	// Create request
 	req, err := c.createRequest()

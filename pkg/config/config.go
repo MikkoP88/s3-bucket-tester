@@ -244,7 +244,9 @@ func GetDefaultConfig() *Config {
 		Timeout:        30,
 		OutputFormat:   "",
 		OutputFile:     "",
-		FollowRedirect: true,
+		// Redirects are off by default: following them blindly lets a
+		// compromised endpoint redirect signed requests elsewhere.
+		FollowRedirect: false,
 		MaxRedirects:   10,
 		Verbose:        false,
 

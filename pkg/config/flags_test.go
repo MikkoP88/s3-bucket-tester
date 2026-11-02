@@ -267,8 +267,8 @@ func TestParseFlags_DefaultValues(t *testing.T) {
 	if config.Timeout != 30 {
 		t.Errorf("Expected default Timeout 30, got %d", config.Timeout)
 	}
-	if config.FollowRedirect != true {
-		t.Error("Expected default FollowRedirect to be true")
+	if config.FollowRedirect != false {
+		t.Error("Expected default FollowRedirect to be false (redirects off by default)")
 	}
 	if config.MaxRedirects != 10 {
 		t.Errorf("Expected default MaxRedirects 10, got %d", config.MaxRedirects)
