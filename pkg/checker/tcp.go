@@ -43,8 +43,8 @@ func (c *TCPChecker) Check() output.TestResult {
 		Duration: time.Since(startTime),
 	}
 
-	// Create address
-	address := fmt.Sprintf("%s:%d", c.Host, c.Port)
+	// Create address (JoinHostPort handles IPv6 bracketing)
+	address := net.JoinHostPort(c.Host, fmt.Sprintf("%d", c.Port))
 
 	c.verbose.LogMessage("Attempting TCP connection to: %s", address)
 	c.verbose.LogMessage("Timeout: %ds", c.Config.Timeout)

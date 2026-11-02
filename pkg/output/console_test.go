@@ -3,17 +3,15 @@ package output
 import (
 	"testing"
 	"time"
-
-	"github.com/s3-bucket-tester/s3tester/pkg/output"
 )
 
 // TestNewTestSummary tests summary calculation
 func TestNewTestSummary(t *testing.T) {
-	results := []output.TestResult{
-		{TestName: "Test 1", Status: output.StatusPass, Duration: 100 * time.Millisecond},
-		{TestName: "Test 2", Status: output.StatusPass, Duration: 200 * time.Millisecond},
-		{TestName: "Test 3", Status: output.StatusFail, Duration: 150 * time.Millisecond, Error: "Test failed"},
-		{TestName: "Test 4", Status: output.StatusWarn, Duration: 50 * time.Millisecond},
+	results := []TestResult{
+		{TestName: "Test 1", Status: StatusPass, Duration: 100 * time.Millisecond},
+		{TestName: "Test 2", Status: StatusPass, Duration: 200 * time.Millisecond},
+		{TestName: "Test 3", Status: StatusFail, Duration: 150 * time.Millisecond, Error: "Test failed"},
+		{TestName: "Test 4", Status: StatusWarn, Duration: 50 * time.Millisecond},
 	}
 
 	summary := NewTestSummary(results)
@@ -36,28 +34,28 @@ func TestNewTestSummary(t *testing.T) {
 func TestPrintConsole(t *testing.T) {
 	// This test just verifies that PrintConsole doesn't crash
 	// We create a minimal report and try to print it
-	report := &output.TestReport{
-		Config: output.Config{
+	report := &TestReport{
+		Config: Config{
 			Endpoint: "https://s3.example.com",
 			Bucket:   "test-bucket",
 			Region:   "us-east-1",
 			AuthType: "sigv4",
 			Timeout:  30,
 		},
-		StartTime: output.TimeNow(),
-		EndTime:   output.TimeNow(),
+		StartTime: time.Now(),
+		EndTime:   time.Now(),
 		Duration:  time.Second,
-		Results: []output.TestResult{
+		Results: []TestResult{
 			{
 				TestName: "Test 1",
-				Status:   output.StatusPass,
+				Status:   StatusPass,
 				Duration: 100 * time.Millisecond,
 			},
 		},
-		Summary: output.NewTestSummary([]output.TestResult{
+		Summary: NewTestSummary([]TestResult{
 			{
 				TestName: "Test 1",
-				Status:   output.StatusPass,
+				Status:   StatusPass,
 				Duration: 100 * time.Millisecond,
 			},
 		}),
@@ -70,35 +68,37 @@ func TestPrintConsole(t *testing.T) {
 // TestPrintJSON tests that JSON printing doesn't crash
 func TestPrintJSON(t *testing.T) {
 	// This test just verifies that PrintJSON doesn't crash
-	report := &output.TestReport{
-		Config: output.Config{
+	report := &TestReport{
+		Config: Config{
 			Endpoint: "https://s3.example.com",
 			Bucket:   "test-bucket",
 			Region:   "us-east-1",
 			AuthType: "sigv4",
 			Timeout:  30,
 		},
-		StartTime: output.TimeNow(),
-		EndTime:   output.TimeNow(),
+		StartTime: time.Now(),
+		EndTime:   time.Now(),
 		Duration:  time.Second,
-		Results: []output.TestResult{
+		Results: []TestResult{
 			{
 				TestName: "Test 1",
-				Status:   output.StatusPass,
+				Status:   StatusPass,
 				Duration: 100 * time.Millisecond,
 			},
 		},
-		Summary: output.NewTestSummary([]output.TestResult{
+		Summary: NewTestSummary([]TestResult{
 			{
 				TestName: "Test 1",
-				Status:   output.StatusPass,
+				Status:   StatusPass,
 				Duration: 100 * time.Millisecond,
 			},
 		}),
 	}
 
-	// This should not crash
-	err := PrintJSON(report, "test-output.json")
+	// Write to a temporary file so the test does not litter the repo
+	tmpFile := t.TempDir() + "/test-output.json"
+
+	err := PrintJSON(report, tmpFile)
 	if err != nil {
 		t.Errorf("PrintJSON returned error: %v", err)
 	}

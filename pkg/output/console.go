@@ -10,11 +10,23 @@ import (
 	"github.com/fatih/color"
 )
 
+// formatPrincipalEntry renders "Key (identifier)" for a structured principal
+// object identified by an ID or URI field; returns "" when neither is present.
+func formatPrincipalEntry(key string, m map[string]interface{}) string {
+	if id, ok := m["ID"].(string); ok {
+		return fmt.Sprintf("%s (%s)", key, id)
+	}
+	if uri, ok := m["URI"].(string); ok {
+		return fmt.Sprintf("%s (%s)", key, uri)
+	}
+	return ""
+}
+
 // formatPrincipal formats a principal value for display
 func formatPrincipal(principal map[string]interface{}) string {
 	var parts []string
 
-	for _, value := range principal {
+	for key, value := range principal {
 		switch v := value.(type) {
 		case string:
 			parts = append(parts, v)
@@ -24,6 +36,21 @@ func formatPrincipal(principal map[string]interface{}) string {
 			for _, item := range v {
 				if s, ok := item.(string); ok {
 					parts = append(parts, s)
+				}
+			}
+		case map[string]interface{}:
+			// Structured principal objects (e.g. a Group identified by its
+			// URI), possibly nested one level deeper under a provider key
+			// such as "AWS" (e.g. a CanonicalUser with an ID)
+			if s := formatPrincipalEntry(key, v); s != "" {
+				parts = append(parts, s)
+				continue
+			}
+			for innerKey, innerVal := range v {
+				if m, ok := innerVal.(map[string]interface{}); ok {
+					if s := formatPrincipalEntry(innerKey, m); s != "" {
+						parts = append(parts, s)
+					}
 				}
 			}
 		}

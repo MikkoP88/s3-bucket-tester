@@ -498,32 +498,39 @@ func ParsePort(endpoint string) int {
 
 // ToOutputConfig converts config to output config
 func (c *Config) ToOutputConfig() output.Config {
-	return output.Config{
-		Endpoint:         c.Endpoint,
-		Bucket:           c.Bucket,
-		Region:           c.Region,
-		AccessKey:        c.AccessKey,
-		SecretKey:        c.SecretKey,
-		AuthType:         c.AuthType,
-		Port:             c.Port,
-		Insecure:         c.Insecure,
-		Timeout:          c.Timeout,
-		OutputFormat:     c.OutputFormat,
-		OutputFile:       c.OutputFile,
-		FollowRedirect:   c.FollowRedirect,
-		MaxRedirects:     c.MaxRedirects,
-		Verbose:          c.Verbose,
-		PathStyle:        c.PathStyle,
-		CheckPolicy:      c.CheckPolicy,
-		Provider:         c.Provider,
-		DetectedProvider: c.DetectedProvider,
-		ProviderCapabilities: &output.ProviderCapabilities{
+	// ProviderCapabilities is populated by Validate(); guard against a nil
+	// value so programmatic callers that skip Validate do not panic here.
+	var capabilities *output.ProviderCapabilities
+	if c.ProviderCapabilities != nil {
+		capabilities = &output.ProviderCapabilities{
 			Name:               c.ProviderCapabilities.Name,
 			PolicySupport:      c.ProviderCapabilities.PolicySupport,
 			ACLSupport:         c.ProviderCapabilities.ACLSupport,
 			VirtualHostSupport: c.ProviderCapabilities.VirtualHostSupport,
 			PathStyleSupport:   c.ProviderCapabilities.PathStyleSupport,
 			Notes:              c.ProviderCapabilities.Notes,
-		},
+		}
+	}
+
+	return output.Config{
+		Endpoint:             c.Endpoint,
+		Bucket:               c.Bucket,
+		Region:               c.Region,
+		AccessKey:            c.AccessKey,
+		SecretKey:            c.SecretKey,
+		AuthType:             c.AuthType,
+		Port:                 c.Port,
+		Insecure:             c.Insecure,
+		Timeout:              c.Timeout,
+		OutputFormat:         c.OutputFormat,
+		OutputFile:           c.OutputFile,
+		FollowRedirect:       c.FollowRedirect,
+		MaxRedirects:         c.MaxRedirects,
+		Verbose:              c.Verbose,
+		PathStyle:            c.PathStyle,
+		CheckPolicy:          c.CheckPolicy,
+		Provider:             c.Provider,
+		DetectedProvider:     c.DetectedProvider,
+		ProviderCapabilities: capabilities,
 	}
 }

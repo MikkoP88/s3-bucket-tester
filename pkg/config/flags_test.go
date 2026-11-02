@@ -3,8 +3,6 @@ package config
 import (
 	"os"
 	"testing"
-
-	"github.com/s3-bucket-tester/s3tester/pkg/checker"
 )
 
 // TestParseFlags_Basic tests basic flag parsing
@@ -182,6 +180,7 @@ func TestParseFlags_MissingValue(t *testing.T) {
 			}
 		})
 	}
+}
 
 // TestParseFlags_Insecure tests insecure flag
 func TestParseFlags_Insecure(t *testing.T) {
@@ -272,7 +271,7 @@ func TestParseFlags_DefaultValues(t *testing.T) {
 		t.Error("Expected default FollowRedirect to be true")
 	}
 	if config.MaxRedirects != 10 {
-		t.Error("Expected default MaxRedirects 10, got %d", config.MaxRedirects)
+		t.Errorf("Expected default MaxRedirects 10, got %d", config.MaxRedirects)
 	}
 	if config.Verbose != false {
 		t.Error("Expected default Verbose to be false")
