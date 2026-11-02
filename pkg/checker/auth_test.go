@@ -400,6 +400,9 @@ func TestAuthCheck_NoRedirects(t *testing.T) {
 	if details.Success {
 		t.Error("Expected Details.Success to be false for a 301 response")
 	}
+	if result.Status != output.StatusFail {
+		t.Errorf("Expected FAIL for an un-followed 301 response, got %s", result.Status)
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	if targetHit {
@@ -735,7 +738,8 @@ func TestAuthCheck_AccessGranted(t *testing.T) {
 	}
 }
 
-// TestAuthCheck_StatusCode tests status code recording and current verdict mapping
+// TestAuthCheck_StatusCode tests status code recording and the explicit
+// verdict mapping: only 200 passes, other 2xx warn, everything else fails
 func TestAuthCheck_StatusCode(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -743,7 +747,10 @@ func TestAuthCheck_StatusCode(t *testing.T) {
 		wantStatus output.Status
 	}{
 		{"200", http.StatusOK, output.StatusPass},
-		{"204", http.StatusNoContent, output.StatusPass},
+		{"204", http.StatusNoContent, output.StatusWarn},
+		{"301", http.StatusMovedPermanently, output.StatusFail},
+		{"302", http.StatusFound, output.StatusFail},
+		{"307", http.StatusTemporaryRedirect, output.StatusFail},
 		{"400", http.StatusBadRequest, output.StatusFail},
 		{"403", http.StatusForbidden, output.StatusFail},
 		{"404", http.StatusNotFound, output.StatusFail},
@@ -766,6 +773,10 @@ func TestAuthCheck_StatusCode(t *testing.T) {
 			}
 			if result.Status != tt.wantStatus {
 				t.Errorf("Expected status %s, got %s", tt.wantStatus, result.Status)
+			}
+			// Invariant: a response that is not 2xx must never PASS
+			if !details.Success && result.Status == output.StatusPass {
+				t.Errorf("PASS reported for unsuccessful response (HTTP %d)", tt.statusCode)
 			}
 		})
 	}
