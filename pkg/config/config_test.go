@@ -126,6 +126,8 @@ func TestConfigValidate_Success(t *testing.T) {
 		AccessKey: "test-key",
 		SecretKey: "test-secret",
 		Region:    "us-east-1",
+		AuthType:  "sigv4",
+		Timeout:   30,
 	}
 
 	err := config.Validate()
@@ -341,6 +343,9 @@ func TestConfigValidate_AllRequiredFields(t *testing.T) {
 		Bucket:    "test-bucket",
 		AccessKey: "test-key",
 		SecretKey: "test-secret",
+		Region:    "us-east-1",
+		AuthType:  "sigv4",
+		Timeout:   30,
 	}
 
 	err := config.Validate()

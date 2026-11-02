@@ -501,36 +501,22 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 		for _, stmt := range policyDoc.Statement {
 			// Extract actions based on effect
 			if stmt.Effect == "Allow" {
-				if actions, ok := stmt.Action.([]string); ok {
-					result.AllowedActions = append(result.AllowedActions, actions...)
-				} else if action, ok := stmt.Action.(string); ok {
-					result.AllowedActions = append(result.AllowedActions, action)
-				}
+				result.AllowedActions = append(result.AllowedActions, c.extractActions(stmt.Action)...)
 			} else if stmt.Effect == "Deny" {
-				if actions, ok := stmt.Action.([]string); ok {
-					result.DeniedActions = append(result.DeniedActions, actions...)
-				} else if action, ok := stmt.Action.(string); ok {
-					result.DeniedActions = append(result.DeniedActions, action)
-				}
+				result.DeniedActions = append(result.DeniedActions, c.extractActions(stmt.Action)...)
 			}
 
-			// Extract principals
-			if principalAWS, ok := stmt.Principal["AWS"]; ok {
-				if principals, ok := principalAWS.([]string); ok {
-					result.Principals = append(result.Principals, principals...)
-				} else if principal, ok := principalAWS.(string); ok {
-					result.Principals = append(result.Principals, principal)
+			// Extract principals (string, array, and object-wrapped forms)
+			principals := c.extractPrincipals(stmt.Principal)
+			if len(principals) == 0 {
+				if principal, ok := stmt.Principal["*"].(string); ok {
+					principals = []string{principal}
 				}
-			} else if principal, ok := stmt.Principal["*"].(string); ok {
-				result.Principals = append(result.Principals, principal)
 			}
+			result.Principals = append(result.Principals, principals...)
 
 			// Extract resources
-			if resources, ok := stmt.Resource.([]string); ok {
-				result.Resources = append(result.Resources, resources...)
-			} else if resource, ok := stmt.Resource.(string); ok {
-				result.Resources = append(result.Resources, resource)
-			}
+			result.Resources = append(result.Resources, c.extractResources(stmt.Resource)...)
 
 			// Extract conditions
 			if stmt.Condition != nil {
@@ -548,8 +534,10 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 		// Access denied
 		var errorResp ErrorResponse
 		if err := xml.Unmarshal(bodyBytes, &errorResp); err == nil {
+			result.Error = fmt.Sprintf("access denied: %s: %s", errorResp.Code, errorResp.Message)
 			return result, fmt.Errorf("access denied: %s", errorResp.Message)
 		}
+		result.Error = "access denied"
 		return result, fmt.Errorf("access denied")
 	}
 
@@ -646,8 +634,10 @@ func (c *PolicyChecker) getBucketACL(client *http.Client) (output.ACLResult, err
 		// Access denied
 		var errorResp ErrorResponse
 		if err := xml.Unmarshal(bodyBytes, &errorResp); err == nil {
+			result.Error = fmt.Sprintf("access denied: %s: %s", errorResp.Code, errorResp.Message)
 			return result, fmt.Errorf("access denied: %s", errorResp.Message)
 		}
+		result.Error = "access denied"
 		return result, fmt.Errorf("access denied")
 	}
 
@@ -700,6 +690,12 @@ func (c *PolicyChecker) extractResources(resource interface{}) []string {
 		resources = append(resources, v)
 	case []string:
 		resources = append(resources, v...)
+	case []interface{}:
+		for _, r := range v {
+			if str, ok := r.(string); ok {
+				resources = append(resources, str)
+			}
+		}
 	}
 	return resources
 }
@@ -725,7 +721,7 @@ func (c *PolicyChecker) addSigV2Auth(req *http.Request) error {
 // signRequestV4 signs the request using AWS Signature Version 4
 func (c *PolicyChecker) signRequestV4(req *http.Request) error {
 	// Get current time
-	now := time.Now().UTC()
+	now := timeNow().UTC()
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
 
@@ -817,7 +813,7 @@ func (c *PolicyChecker) buildCanonicalQueryString(rawQuery string) string {
 // signRequestV2 signs the request using AWS Signature Version 2
 func (c *PolicyChecker) signRequestV2(req *http.Request) error {
 	// Get current time
-	now := time.Now().UTC()
+	now := timeNow().UTC()
 
 	// Set headers
 	req.Header.Set("Date", now.Format(time.RFC1123))

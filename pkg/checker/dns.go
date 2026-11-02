@@ -10,10 +10,18 @@ import (
 	"github.com/s3-bucket-tester/s3tester/pkg/output"
 )
 
+// Resolver abstracts DNS lookups so tests can provide a deterministic stub.
+// *net.Resolver satisfies this interface.
+type Resolver interface {
+	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
+	LookupAddr(ctx context.Context, addr string) ([]string, error)
+}
+
 // DNSChecker performs DNS resolution checks
 type DNSChecker struct {
 	BaseChecker
 	Hostname string
+	resolver Resolver
 	verbose  *VerboseLogger
 }
 
@@ -22,6 +30,7 @@ func NewDNSChecker(config output.Config, hostname string) *DNSChecker {
 	return &DNSChecker{
 		BaseChecker: NewBaseChecker(config),
 		Hostname:    hostname,
+		resolver:    net.DefaultResolver,
 		verbose:     NewVerboseLogger(config.Verbose),
 	}
 }
@@ -57,7 +66,10 @@ func (c *DNSChecker) Check() output.TestResult {
 	defer cancel()
 
 	// Resolve hostname
-	resolver := &net.Resolver{}
+	resolver := c.resolver
+	if resolver == nil {
+		resolver = net.DefaultResolver
+	}
 	ips, err := resolver.LookupIPAddr(ctx, c.Hostname)
 	if err != nil {
 		c.verbose.LogMessage("DNS resolution failed: %v", err)
@@ -79,10 +91,10 @@ func (c *DNSChecker) Check() output.TestResult {
 		c.verbose.LogMessage("  [%d] %s", i+1, ip)
 	}
 
-	// Perform reverse DNS lookup for first IP
+	// Perform reverse DNS lookup for first IP (bounded by the context deadline)
 	var reverseDNS string
 	if len(ips) > 0 {
-		names, err := net.LookupAddr(ips[0].IP.String())
+		names, err := resolver.LookupAddr(ctx, ips[0].IP.String())
 		if err == nil && len(names) > 0 {
 			reverseDNS = names[0]
 			c.verbose.LogMessage("Reverse DNS for %s: %s", ips[0].IP.String(), reverseDNS)
@@ -133,8 +145,16 @@ func (c *DNSChecker) handleIPCheck(startTime time.Time) output.TestResult {
 
 	c.verbose.LogMessage("Using IP address directly: %s", c.Hostname)
 
-	// Perform reverse DNS lookup
-	names, err := net.LookupAddr(c.Hostname)
+	// Perform reverse DNS lookup, bounded by a context deadline
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.Config.Timeout)*time.Second)
+	defer cancel()
+
+	resolver := c.resolver
+	if resolver == nil {
+		resolver = net.DefaultResolver
+	}
+
+	names, err := resolver.LookupAddr(ctx, c.Hostname)
 	var reverseDNS string
 	if err == nil && len(names) > 0 {
 		reverseDNS = names[0]
