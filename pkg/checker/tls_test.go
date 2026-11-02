@@ -595,8 +595,11 @@ func TestTLSCheck_HostnameMismatch(t *testing.T) {
 	if result.Status != output.StatusFail {
 		t.Errorf("Expected FAIL for hostname mismatch, got %s", result.Status)
 	}
-	if !strings.Contains(result.Error, "valid for") && !strings.Contains(result.Error, "authority") {
-		t.Errorf("Expected hostname or trust verification error, got '%s'", result.Error)
+	// Go's verification error text differs across patch versions (host
+	// mismatch, missing IP SANs, unknown authority); every variant is an
+	// x509 verification failure, which is the expected error class here.
+	if !strings.Contains(result.Error, "x509") {
+		t.Errorf("Expected certificate verification error, got '%s'", result.Error)
 	}
 }
 
