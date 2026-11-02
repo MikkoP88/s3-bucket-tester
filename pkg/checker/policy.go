@@ -27,7 +27,65 @@ func NewVerboseLogger(enabled bool) *VerboseLogger {
 	return &VerboseLogger{enabled: enabled}
 }
 
-// LogRequest logs HTTP request details
+// redactAuthorization masks an Authorization header value, keeping only the
+// signing algorithm, a masked credential identifier, and the signed header
+// list. Anything else (signature, credential scope) is dropped.
+func redactAuthorization(value string) string {
+	if value == "" {
+		return ""
+	}
+	if !strings.HasPrefix(value, "AWS4-HMAC-SHA256 ") {
+		// SigV2 or unknown scheme: nothing safe to display
+		return "[REDACTED]"
+	}
+
+	parts := strings.SplitN(value, ", ", 3)
+	if len(parts) != 3 {
+		return "AWS4-HMAC-SHA256 [REDACTED]"
+	}
+
+	// Mask the access key inside Credential=<key>/<scope>
+	head := parts[0]
+	if idx := strings.Index(head, "Credential="); idx != -1 {
+		scope := head[idx+len("Credential="):]
+		key := scope
+		if slash := strings.Index(scope, "/"); slash != -1 {
+			key = scope[:slash]
+		}
+		head = head[:idx+len("Credential=")] + output.MaskAccessKey(key)
+	}
+	return head + ", " + parts[1] + ", Signature=[REDACTED]"
+}
+
+// redactURLString masks authentication material carried in a request URL's
+// query string (SigV2 AWSAccessKeyId/Signature, SigV4 pre-signed params).
+func redactURLString(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.RawQuery == "" {
+		return rawURL
+	}
+
+	q := u.Query()
+	changed := false
+	for key := range q {
+		switch key {
+		case "AWSAccessKeyId", "X-Amz-Credential":
+			q.Set(key, output.MaskAccessKey(q.Get(key)))
+			changed = true
+		case "Signature", "X-Amz-Signature", "X-Amz-Security-Token":
+			q.Set(key, "[REDACTED]")
+			changed = true
+		}
+	}
+	if !changed {
+		return rawURL
+	}
+
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+// LogRequest logs HTTP request details with authentication material redacted
 func (v *VerboseLogger) LogRequest(req *http.Request) {
 	if !v.enabled {
 		return
@@ -38,9 +96,12 @@ func (v *VerboseLogger) LogRequest(req *http.Request) {
 	fmt.Println(strings.Repeat("=", 70))
 
 	// Dump request
-	fmt.Printf("%s %s %s\n", req.Method, req.URL.String(), req.Proto)
+	fmt.Printf("%s %s %s\n", req.Method, redactURLString(req.URL.String()), req.Proto)
 	for key, values := range req.Header {
 		for _, value := range values {
+			if strings.EqualFold(key, "Authorization") {
+				value = redactAuthorization(value)
+			}
 			fmt.Printf("%s: %s\n", key, value)
 		}
 	}
