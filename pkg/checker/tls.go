@@ -146,6 +146,27 @@ func (c *TLSChecker) Check() output.TestResult {
 		tlsResult.Certificate.Chain = chain
 	}
 
+	// Verdict: certificate validity problems fail the check even with
+	// --insecure; an unverified chain is at best a warning
+	switch {
+	case time.Now().Before(tlsResult.Certificate.NotBefore):
+		result.Status = output.StatusFail
+		result.Error = "certificate is not yet valid"
+	case tlsResult.Certificate.IsExpired:
+		result.Status = output.StatusFail
+		result.Error = "certificate has expired"
+	case !tlsResult.Verified:
+		result.Status = output.StatusWarn
+		if c.Config.Insecure {
+			result.Error = "certificate verification disabled (--insecure); connection is vulnerable to interception"
+		} else {
+			result.Error = "certificate chain could not be verified"
+		}
+	}
+	if warnings := c.GetCertificateWarnings(tlsResult); len(warnings) > 0 {
+		result.Warnings = warnings
+	}
+
 	result.Details = tlsResult
 	result.Duration = time.Since(startTime)
 

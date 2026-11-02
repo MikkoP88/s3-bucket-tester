@@ -21,6 +21,7 @@ type TestResult struct {
 	Status   Status        `json:"status"`
 	Duration time.Duration `json:"duration"`
 	Error    string        `json:"error,omitempty"`
+	Warnings []string      `json:"warnings,omitempty"`
 	Details  interface{}   `json:"details,omitempty"`
 }
 

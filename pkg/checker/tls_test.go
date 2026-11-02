@@ -181,8 +181,11 @@ func TestTLSCheck_Success(t *testing.T) {
 
 	result := checker.Check()
 
-	if result.Status != output.StatusPass {
-		t.Errorf("Expected PASS, got %s (error: %s)", result.Status, result.Error)
+	// The test certificate is locally generated and untrusted, so even a
+	// fully successful handshake is WARN: the chain cannot be verified.
+	// PASS requires a chain trusted by the local trust store.
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected WARN for unverified chain, got %s (error: %s)", result.Status, result.Error)
 	}
 	if result.Details == nil {
 		t.Fatal("Expected details to be populated")
@@ -213,6 +216,34 @@ func TestTLSCheck_CertificateExpired(t *testing.T) {
 	}
 	if details.Certificate.DaysUntilExpiry >= 0 {
 		t.Errorf("Expected negative days until expiry, got %d", details.Certificate.DaysUntilExpiry)
+	}
+	// An expired certificate must fail even with verification disabled
+	if result.Status != output.StatusFail {
+		t.Errorf("Expected FAIL for expired certificate, got %s", result.Status)
+	}
+}
+
+// TestTLSCheck_CertificateNotYetValid tests that a certificate whose
+// validity starts in the future fails even with verification disabled
+func TestTLSCheck_CertificateNotYetValid(t *testing.T) {
+	now := time.Now()
+	template := validTLSCertTemplate("localhost", []string{"localhost"}, []net.IP{net.ParseIP("127.0.0.1")})
+	template.NotBefore = now.Add(48 * time.Hour)
+	template.NotAfter = now.Add(96 * time.Hour)
+	cert, _, _ := generateTestCert(t, template)
+	server := startTLSTestServer(t, cert)
+	host, port := tlsServerHostPort(t, server)
+
+	config := output.Config{Endpoint: server.URL, Timeout: 10, Insecure: true}
+	checker := NewTLSChecker(config, host, port)
+
+	result := checker.Check()
+
+	if result.Status != output.StatusFail {
+		t.Errorf("Expected FAIL for not-yet-valid certificate, got %s", result.Status)
+	}
+	if !strings.Contains(result.Error, "not yet valid") {
+		t.Errorf("Expected not-yet-valid error, got '%s'", result.Error)
 	}
 }
 
@@ -264,9 +295,17 @@ func TestTLSCheck_CertificateNearExpiry(t *testing.T) {
 	if details.Certificate.DaysUntilExpiry < 14 || details.Certificate.DaysUntilExpiry > 16 {
 		t.Errorf("Expected ~15 days until expiry, got %d", details.Certificate.DaysUntilExpiry)
 	}
+	// Near expiry (under 30 days) is a warning, not a pass
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected WARN for near-expiry certificate, got %s", result.Status)
+	}
+	if len(result.Warnings) == 0 {
+		t.Error("Expected near-expiry warning to be reported")
+	}
 }
 
 // TestTLSCheck_InsecureSkipVerify tests insecure mode records unverified status
+// as a warning: the handshake succeeds but the result must not claim PASS
 func TestTLSCheck_InsecureSkipVerify(t *testing.T) {
 	cert, _, _ := generateTestCert(t, validTLSCertTemplate("localhost", []string{"localhost"}, []net.IP{net.ParseIP("127.0.0.1")}))
 	server := startTLSTestServer(t, cert)
@@ -277,8 +316,11 @@ func TestTLSCheck_InsecureSkipVerify(t *testing.T) {
 
 	result := checker.Check()
 
-	if result.Status != output.StatusPass {
-		t.Errorf("Expected PASS, got %s (error: %s)", result.Status, result.Error)
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected WARN in insecure mode, got %s (error: %s)", result.Status, result.Error)
+	}
+	if !strings.Contains(result.Error, "--insecure") {
+		t.Errorf("Expected error to mention --insecure, got '%s'", result.Error)
 	}
 	details, ok := result.Details.(output.TLSResult)
 	if !ok {

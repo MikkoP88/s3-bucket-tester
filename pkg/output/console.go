@@ -230,6 +230,10 @@ func printResult(index, total int, result TestResult, config Config) {
 		fmt.Printf("\n  %s: %s\n", red("Error"), result.Error)
 	}
 
+	for _, warning := range result.Warnings {
+		fmt.Printf("  %s: %s\n", yellow("Warning"), warning)
+	}
+
 	switch result.TestName {
 	case "DNS Resolution Check":
 		printDNSResult(result)
