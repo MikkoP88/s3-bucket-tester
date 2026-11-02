@@ -454,9 +454,7 @@ func (c *PolicyChecker) Check() output.TestResult {
 
 	// Security findings: public or broad-access grants on the bucket
 	readFindings, writeFindings := c.collectFindings(policyResult, aclResult)
-	for _, finding := range append(readFindings, writeFindings...) {
-		result.Warnings = append(result.Warnings, finding)
-	}
+	result.Warnings = append(result.Warnings, append(readFindings, writeFindings...)...)
 
 	// Determine status: lookup failures and escalated public-access
 	// findings fail; unescalated findings and single lookup errors warn

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/s3-bucket-tester/s3tester/pkg/checker"
@@ -75,8 +76,10 @@ func ParseFlags(args []string) (*Config, error) {
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("--timeout requires a value")
 			}
-			var timeout int
-			fmt.Sscanf(args[i+1], "%d", &timeout)
+			timeout, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("--timeout requires a number, got %q", args[i+1])
+			}
 			config.Timeout = timeout
 			i++
 		case arg == "--output-file":
@@ -93,8 +96,10 @@ func ParseFlags(args []string) (*Config, error) {
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("--max-redirects requires a value")
 			}
-			var maxRedirects int
-			fmt.Sscanf(args[i+1], "%d", &maxRedirects)
+			maxRedirects, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("--max-redirects requires a number, got %q", args[i+1])
+			}
 			config.MaxRedirects = maxRedirects
 			i++
 		case arg == "--verbose":

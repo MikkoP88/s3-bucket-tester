@@ -1,0 +1,22 @@
+version: "2"
+
+# golangci-lint configuration used by CI (see .github/workflows/ci.yml) and
+# `make lint`.
+
+linters:
+  settings:
+    staticcheck:
+      checks:
+        - all
+        # QF* are style-only quickfix suggestions, not correctness issues
+        - -QF*
+  exclusions:
+    rules:
+      # Test helpers routinely ignore writer and closer errors
+      - path: _test\.go
+        linters:
+          - errcheck
+      # Deferred closes are best-effort cleanup on already-handled paths
+      - source: "^\\s*defer .+\\.Close\\(\\)$"
+        linters:
+          - errcheck
