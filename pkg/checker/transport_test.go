@@ -37,9 +37,10 @@ func TestReadLimited(t *testing.T) {
 func TestGetBucketPolicy_OversizedBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(make([]byte, 2*maxPolicyBodySize)); err != nil {
-			t.Errorf("failed to write oversized body: %v", err)
-		}
+		// The client stops reading once the cap is exceeded and drops the
+		// connection; a broken-pipe write error on the server side is the
+		// expected consequence of enforcing the limit, not a failure.
+		_, _ = w.Write(make([]byte, 2*maxPolicyBodySize))
 	}))
 	defer server.Close()
 

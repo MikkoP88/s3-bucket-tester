@@ -572,8 +572,14 @@ func TestTLSCheck_IPv6Address(t *testing.T) {
 
 	result := checker.Check()
 
-	if result.Status != output.StatusPass {
-		t.Errorf("Expected PASS over IPv6, got %s (error: %s)", result.Status, result.Error)
+	// Insecure TLS warns by design (verification disabled); the point of
+	// this test is that the handshake itself succeeds over IPv6
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected WARN over IPv6 (insecure TLS warns by design), got %s (error: %s)", result.Status, result.Error)
+	}
+	details, ok := result.Details.(output.TLSResult)
+	if !ok || details.TLSVersion == "" {
+		t.Errorf("Expected completed TLS handshake details over IPv6, got %+v", result.Details)
 	}
 }
 
