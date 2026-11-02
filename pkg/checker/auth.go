@@ -173,34 +173,58 @@ func (c *AuthChecker) Check() output.TestResult {
 		ResponseBody: string(body),
 	}
 
-	// Check bucket existence and access
-	if resp.StatusCode == 200 {
+	// Explicit verdict mapping: 200 is the only PASS. Anything else —
+	// unexpected 2xx, redirects (not followed by default), auth denials,
+	// missing buckets, other client/server errors — must never report a
+	// successful authenticated check.
+	switch {
+	case resp.StatusCode == http.StatusOK:
 		authResult.BucketExists = true
 		authResult.AccessGranted = true
+		result.Status = output.StatusPass
 		c.verbose.LogMessage("Bucket exists and access is granted")
-	} else if resp.StatusCode == 403 {
+
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		// 2xx but not 200: the endpoint answered, but this is not the
+		// response a bucket HEAD request expects
+		authResult.BucketExists = true
+		result.Status = output.StatusWarn
+		result.Error = fmt.Sprintf("unexpected status code %d from bucket request", resp.StatusCode)
+		c.verbose.LogMessage("Unexpected 2xx status code: %d", resp.StatusCode)
+
+	case resp.StatusCode >= 300 && resp.StatusCode < 400:
+		location := resp.Header.Get("Location")
+		result.Status = output.StatusFail
+		result.Error = fmt.Sprintf("unexpected redirect (HTTP %d) to %q: redirects are not followed by default (see --follow-redirects)", resp.StatusCode, location)
+		c.verbose.LogMessage("Redirect response (HTTP %d) treated as failure", resp.StatusCode)
+
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		authResult.BucketExists = true
 		authResult.AccessGranted = false
-		c.verbose.LogMessage("Bucket exists but access is denied (403)")
-	} else if resp.StatusCode == 404 {
+		result.Status = output.StatusFail
+		c.verbose.LogMessage("Bucket exists but access is denied (%d)", resp.StatusCode)
+
+	case resp.StatusCode == http.StatusNotFound:
 		authResult.BucketExists = false
 		authResult.AccessGranted = false
+		result.Status = output.StatusFail
 		c.verbose.LogMessage("Bucket not found (404)")
-	} else {
+
+	default:
+		result.Status = output.StatusFail
 		c.verbose.LogMessage("Unexpected status code: %d", resp.StatusCode)
 	}
 
-	// Parse error response for more details
+	// Parse error response bodies (4xx/5xx) for provider detail
 	if resp.StatusCode >= 400 {
 		var errResp ErrorResponse
-		if err := xml.Unmarshal(body, &errResp); err == nil {
+		if err := xml.Unmarshal(body, &errResp); err == nil && errResp.Code != "" {
 			result.Error = fmt.Sprintf("%s: %s", errResp.Code, errResp.Message)
 			c.verbose.LogMessage("Error response: %s - %s", errResp.Code, errResp.Message)
-		} else {
+		} else if result.Error == "" {
 			result.Error = fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body))
 			c.verbose.LogMessage("Error response: HTTP %d", resp.StatusCode)
 		}
-		result.Status = output.StatusFail
 	}
 
 	c.verbose.LogMessage("Provider detected: %s", authResult.Provider)

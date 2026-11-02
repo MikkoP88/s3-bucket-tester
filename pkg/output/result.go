@@ -2,6 +2,8 @@ package output
 
 import (
 	"crypto/x509"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -21,6 +23,7 @@ type TestResult struct {
 	Status   Status        `json:"status"`
 	Duration time.Duration `json:"duration"`
 	Error    string        `json:"error,omitempty"`
+	Warnings []string      `json:"warnings,omitempty"`
 	Details  interface{}   `json:"details,omitempty"`
 }
 
@@ -106,11 +109,145 @@ type BucketPolicy struct {
 	Statement []Statement `json:"statement"`
 }
 
+// Principal represents a policy statement principal. AWS policy documents
+// encode principals as "*", {"AWS": "..."}, {"AWS": ["...", "..."]}, arrays
+// of such objects, or nested structured objects; every form unmarshals
+// into Values keyed by principal type, with Wildcard marking the
+// anonymous-everyone principal. The original encoding is preserved so
+// reports and console output keep the provider's own document form.
+type Principal struct {
+	Wildcard bool
+	Values   map[string][]string
+	// structured records whether nested structured entries (e.g.
+	// CanonicalUser objects) were present; they carry no wildcard risk
+	structured bool
+	raw        json.RawMessage
+}
+
+// UnmarshalJSON accepts the string, object, and array-of-objects forms.
+// Unparseable principal structures return an error so policy parsing can
+// never silently treat an unreadable principal as safe.
+func (p *Principal) UnmarshalJSON(data []byte) error {
+	p.raw = append(json.RawMessage(nil), data...)
+
+	// String form: "*" or a bare ARN
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		if s == "*" {
+			p.Wildcard = true
+			return nil
+		}
+		p.Values = map[string][]string{"AWS": {s}}
+		return nil
+	}
+
+	// Array-of-objects form: [{"AWS": "..."}, {"Service": "..."}]
+	var entries []map[string]interface{}
+	if err := json.Unmarshal(data, &entries); err == nil {
+		for _, entry := range entries {
+			p.absorbPrincipal(entry)
+		}
+		return p.requireEntries()
+	}
+
+	// Object form: {"AWS": "*"} or {"AWS": {"CanonicalUser": {...}}}
+	var entry map[string]interface{}
+	if err := json.Unmarshal(data, &entry); err == nil {
+		p.absorbPrincipal(entry)
+		return p.requireEntries()
+	}
+
+	return fmt.Errorf("unsupported principal form")
+}
+
+// MarshalJSON re-emits the principal in its original document form
+func (p Principal) MarshalJSON() ([]byte, error) {
+	if len(p.raw) > 0 {
+		return p.raw, nil
+	}
+	if p.Wildcard {
+		return []byte(`"*"`), nil
+	}
+	out := make(map[string]interface{}, len(p.Values))
+	for key, ids := range p.Values {
+		if len(ids) == 1 {
+			out[key] = ids[0]
+		} else {
+			out[key] = ids
+		}
+	}
+	return json.Marshal(out)
+}
+
+// absorbPrincipal merges one principal object into Values; nested
+// structured entries set the structured marker and live only in raw
+func (p *Principal) absorbPrincipal(entry map[string]interface{}) {
+	if p.Values == nil {
+		p.Values = map[string][]string{}
+	}
+	for key, value := range entry {
+		switch v := value.(type) {
+		case string:
+			p.addPrincipalValue(key, v)
+		case []interface{}:
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					p.addPrincipalValue(key, s)
+				}
+			}
+		case map[string]interface{}:
+			p.structured = true
+		}
+	}
+}
+
+func (p *Principal) addPrincipalValue(key, value string) {
+	if value == "*" {
+		p.Wildcard = true
+	}
+	p.Values[key] = append(p.Values[key], value)
+}
+
+// requireEntries rejects principals that carry no recognizable entry
+func (p *Principal) requireEntries() error {
+	if len(p.Values) == 0 && !p.structured {
+		return fmt.Errorf("principal contains no recognizable entries")
+	}
+	return nil
+}
+
+// IsWildcard reports whether the principal grants access to everyone
+func (p Principal) IsWildcard() bool {
+	if p.Wildcard {
+		return true
+	}
+	for _, ids := range p.Values {
+		for _, id := range ids {
+			if id == "*" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// List returns all principal identifiers for display
+func (p Principal) List() []string {
+	if p.IsWildcard() {
+		return []string{"*"}
+	}
+	var listed []string
+	for _, ids := range p.Values {
+		listed = append(listed, ids...)
+	}
+	return listed
+}
+
 // Statement represents a single statement in a bucket policy
 type Statement struct {
 	Sid       string                 `json:"sid,omitempty"`
 	Effect    string                 `json:"effect"` // "Allow" or "Deny"
-	Principal map[string]interface{} `json:"principal"`
+	Principal Principal              `json:"principal"`
 	Action    interface{}            `json:"action"`   // string or []string
 	Resource  interface{}            `json:"resource"` // string or []string
 	Condition map[string]interface{} `json:"condition,omitempty"`
@@ -118,13 +255,14 @@ type Statement struct {
 
 // ACLResult contains bucket ACL check details
 type ACLResult struct {
-	Owner         ACLGrant   `json:"owner"`
-	Grants        []ACLGrant `json:"grants"`
-	PublicRead    bool       `json:"publicRead"`
-	PublicWrite   bool       `json:"publicWrite"`
-	AuthUsersRead bool       `json:"authUsersRead"`
-	Error         string     `json:"error,omitempty"`
-	ResponseBody  string     `json:"responseBody,omitempty"`
+	Owner          ACLGrant   `json:"owner"`
+	Grants         []ACLGrant `json:"grants"`
+	PublicRead     bool       `json:"publicRead"`
+	PublicWrite    bool       `json:"publicWrite"`
+	AuthUsersRead  bool       `json:"authUsersRead"`
+	AuthUsersWrite bool       `json:"authUsersWrite"`
+	Error          string     `json:"error,omitempty"`
+	ResponseBody   string     `json:"responseBody,omitempty"`
 }
 
 // PolicyACLResult contains combined policy and ACL check details
@@ -188,6 +326,8 @@ type Config struct {
 	Verbose         bool   `json:"verbose"`
 	PathStyle       bool   `json:"pathStyle"`
 	CheckPolicy     bool   `json:"checkPolicy"`
+	FailOnPublicWrite bool `json:"failOnPublicWrite"`
+	FailOnPublicRead  bool `json:"failOnPublicRead"`
 	Provider        string `json:"provider"`
 	DetectedProvider string `json:"detectedProvider"`
 

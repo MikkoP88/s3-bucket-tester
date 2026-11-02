@@ -105,6 +105,12 @@ func ParseFlags(args []string) (*Config, error) {
 			config.PathStyle = true
 		case arg == "--check-policy":
 			config.CheckPolicy = true
+		case arg == "--fail-on-public-write":
+			config.FailOnPublicWrite = true
+		case arg == "--fail-on-public-read":
+			config.FailOnPublicRead = true
+		case arg == "--strict":
+			config.Strict = true
 		case strings.HasPrefix(arg, "--"):
 			return nil, fmt.Errorf("unknown flag: %s", arg)
 		}
@@ -177,8 +183,19 @@ OPTIONAL FLAGS:
     --verbose              Enable verbose output
     --check-policy         Enable bucket policy and ACL check
                            (requires s3:GetBucketPolicy and s3:GetBucketAcl permissions)
+    --fail-on-public-read  Treat public read access findings as failures
+                           (with --check-policy; default: WARN)
+    --fail-on-public-write Treat public write access findings as failures
+                           (with --check-policy; default: WARN)
+    --strict               Exit with code 1 when any test reports WARN
     --help, -h             Show this help message
     --version              Show version information
+
+EXIT CODES:
+    0    All tests passed (warnings allowed unless --strict is set)
+    1    At least one test failed, or (with --strict) reported a warning
+    2    Configuration error
+    3    Internal error, e.g. the report file could not be written
 
 EXAMPLES:
     # Using built-in provider (AWS)

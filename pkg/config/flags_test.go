@@ -383,3 +383,30 @@ func TestParseFlags_EmptyArgs(t *testing.T) {
 		t.Errorf("Expected empty Endpoint, got '%s'", config.Endpoint)
 	}
 }
+
+// TestParseFlags_PublicAccessEscalation tests the public-access
+// escalation and strict flags
+func TestParseFlags_PublicAccessEscalation(t *testing.T) {
+	config, err := ParseFlags([]string{
+		"--bucket", "test-bucket",
+		"--check-policy",
+		"--fail-on-public-read",
+		"--fail-on-public-write",
+		"--strict",
+	})
+	if err != nil {
+		t.Fatalf("ParseFlags failed: %v", err)
+	}
+	if !config.CheckPolicy {
+		t.Error("Expected CheckPolicy to be true")
+	}
+	if !config.FailOnPublicRead {
+		t.Error("Expected FailOnPublicRead to be true")
+	}
+	if !config.FailOnPublicWrite {
+		t.Error("Expected FailOnPublicWrite to be true")
+	}
+	if !config.Strict {
+		t.Error("Expected Strict to be true")
+	}
+}

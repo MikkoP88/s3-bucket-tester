@@ -43,6 +43,9 @@ type Config struct {
 	VirtualHosted        bool
 	PathStyle            bool
 	CheckPolicy          bool // Enable bucket policy and ACL check
+	FailOnPublicWrite    bool // Escalate public write findings to FAIL
+	FailOnPublicRead     bool // Escalate public read findings to FAIL
+	Strict               bool // Exit non-zero when any test reports WARN
 	ProviderCapabilities *ProviderCapabilities
 }
 
@@ -256,6 +259,9 @@ func GetDefaultConfig() *Config {
 		VirtualHosted:        false,
 		PathStyle:            false,
 		CheckPolicy:          false,
+		FailOnPublicWrite:    false,
+		FailOnPublicRead:     false,
+		Strict:               false,
 		ProviderCapabilities: nil,
 	}
 }
@@ -532,6 +538,8 @@ func (c *Config) ToOutputConfig() output.Config {
 		Verbose:              c.Verbose,
 		PathStyle:            c.PathStyle,
 		CheckPolicy:          c.CheckPolicy,
+		FailOnPublicWrite:    c.FailOnPublicWrite,
+		FailOnPublicRead:     c.FailOnPublicRead,
 		Provider:             c.Provider,
 		DetectedProvider:     c.DetectedProvider,
 		ProviderCapabilities: capabilities,

@@ -102,10 +102,13 @@ func main() {
 	// Print console output (always)
 	output.PrintConsole(report)
 
-	// Print JSON output if output file is specified
+	// Print JSON output if output file is specified. A write failure is an
+	// error condition for automation and must not exit success
+	var reportErr error
 	if cfg.OutputFile != "" {
 		if err := output.PrintJSON(report, cfg.OutputFile); err != nil {
-			fmt.Fprintf(os.Stderr, "\nWarning: Failed to write JSON output: %v\n", err)
+			fmt.Fprintf(os.Stderr, "\nError: Failed to write JSON output: %v\n", err)
+			reportErr = err
 		} else {
 			fmt.Printf("\nJSON output saved to: %s\n", cfg.OutputFile)
 		}
@@ -114,9 +117,15 @@ func main() {
 	// Print remediations for failed tests
 	printRemediations(report.Results)
 
-	// Exit with appropriate code
-	if report.Summary.Failed > 0 {
+	// Exit code contract: failures exit 1; --strict also exits 1 when any
+	// test warned; a failed report write exits 3
+	switch {
+	case report.Summary.Failed > 0:
 		os.Exit(ExitCodeFailed)
+	case cfg.Strict && report.Summary.Warnings > 0:
+		os.Exit(ExitCodeFailed)
+	case reportErr != nil:
+		os.Exit(ExitCodeError)
 	}
 	os.Exit(ExitCodeSuccess)
 }
