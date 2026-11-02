@@ -169,25 +169,42 @@ type TestReport struct {
 
 // Config contains the test configuration
 type Config struct {
-	Endpoint             string                `json:"endpoint"`
-	Bucket               string                `json:"bucket"`
-	Region               string                `json:"region"`
-	AccessKey            string                `json:"accessKey"`
-	SecretKey            string                `json:"secretKey"`
-	AuthType             string                `json:"authType"`
-	Port                 int                   `json:"port"`
-	Insecure             bool                  `json:"insecure"`
-	Timeout              int                   `json:"timeout"`
-	OutputFormat         string                `json:"outputFormat"`
-	OutputFile           string                `json:"outputFile"`
-	FollowRedirect       bool                  `json:"followRedirect"`
-	MaxRedirects         int                   `json:"maxRedirects"`
-	Verbose              bool                  `json:"verbose"`
-	PathStyle            bool                  `json:"pathStyle"`
-	CheckPolicy          bool                  `json:"checkPolicy"`
-	Provider             string                `json:"provider"`
-	DetectedProvider     string                `json:"detectedProvider"`
+	Endpoint string `json:"endpoint"`
+	Bucket   string `json:"bucket"`
+	Region   string `json:"region"`
+	// Credentials are never serialized: AccessKey is written only in masked
+	// form via AccessKeyMasked, SecretKey not at all.
+	AccessKey       string `json:"-"`
+	SecretKey       string `json:"-"`
+	AccessKeyMasked string `json:"accessKey,omitempty"`
+	AuthType        string `json:"authType"`
+	Port            int    `json:"port"`
+	Insecure        bool   `json:"insecure"`
+	Timeout         int    `json:"timeout"`
+	OutputFormat    string `json:"outputFormat"`
+	OutputFile      string `json:"outputFile"`
+	FollowRedirect  bool   `json:"followRedirect"`
+	MaxRedirects    int    `json:"maxRedirects"`
+	Verbose         bool   `json:"verbose"`
+	PathStyle       bool   `json:"pathStyle"`
+	CheckPolicy     bool   `json:"checkPolicy"`
+	Provider        string `json:"provider"`
+	DetectedProvider string `json:"detectedProvider"`
+
 	ProviderCapabilities *ProviderCapabilities `json:"providerCapabilities,omitempty"`
+}
+
+// MaskAccessKey returns a redacted form of an access key for reports and
+// logs: the first four characters followed by an ellipsis. Keys of four
+// characters or fewer are masked entirely.
+func MaskAccessKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	if len(key) <= 4 {
+		return "****"
+	}
+	return key[:4] + "…"
 }
 
 // ProviderCapabilities defines the capabilities of a provider

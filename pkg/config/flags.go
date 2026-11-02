@@ -127,8 +127,15 @@ USAGE:
 
 REQUIRED FLAGS:
     --bucket <name>        Bucket name to test
-    --access-key <key>     Access key ID
-    --secret-key <key>     Secret access key
+
+CREDENTIALS (resolved in this order):
+    1. --access-key / --secret-key flags
+    2. S3TESTER_ACCESS_KEY / S3TESTER_SECRET_ACCESS_KEY environment variables
+    3. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY environment variables
+    4. hidden interactive prompt (only when stdin is a terminal)
+
+    Prefer environment variables or the prompt over flags: flags can leak
+    through shell history and process listings.
 
 ENDPOINT FLAGS (required):
     --endpoint <url>       S3 endpoint URL or built-in provider shortcut

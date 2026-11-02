@@ -268,10 +268,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("bucket is required")
 	}
 	if c.AccessKey == "" {
-		return fmt.Errorf("access-key is required")
+		return fmt.Errorf("access-key is required (flag --access-key, env %s or %s, or interactive prompt)", envAccessKey, envAWSAccessKey)
 	}
 	if c.SecretKey == "" {
-		return fmt.Errorf("secret-key is required")
+		return fmt.Errorf("secret-key is required (flag --secret-key, env %s or %s, or interactive prompt)", envSecretKey, envAWSSecretKey)
 	}
 
 	// Resolve provider to endpoint if needed
@@ -518,6 +518,7 @@ func (c *Config) ToOutputConfig() output.Config {
 		Region:               c.Region,
 		AccessKey:            c.AccessKey,
 		SecretKey:            c.SecretKey,
+		AccessKeyMasked:      output.MaskAccessKey(c.AccessKey),
 		AuthType:             c.AuthType,
 		Port:                 c.Port,
 		Insecure:             c.Insecure,
