@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   findings from WARN to FAIL (with `--check-policy`).
 - `--strict` flag: exit code 1 when any test reports WARN.
 - `warnings` field on test results, printed in console output.
+- Signing regression tests: the exact SigV2 signature is pinned against the
+  AWS-published example vector, and SigV4 keys and signatures are re-derived
+  independently and validated against the wire values a test server receives.
 
 ### Changed
 
@@ -43,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   AuthenticatedUsers grants including FULL_CONTROL, wildcard-principal Allow
   statements) as WARN; PASS requires zero findings.
 - Exit code 3 now signals report-write failures (previously only a console warning).
+- Request signing is consolidated into one shared signer for the authentication and
+  policy checks, replacing two divergent copies of the SigV2/SigV4 logic; the
+  duplicate `ParseHostname`/`ParsePort` helpers in `pkg/config` were removed.
 
 ### Fixed
 
@@ -66,6 +72,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bucket URL construction goes through `net/url`: `http://` endpoints, explicit
   ports and endpoint path prefixes are preserved, and TLS dials use IPv6-safe
   host/port formatting.
+- **Security:** SigV2 query authentication now follows the S3 REST authentication
+  specification: HMAC-SHA1 digest with Base64 encoding and the `Expires` value in
+  the string-to-sign, instead of HMAC-SHA256 hex over the `Date` header (rejected
+  by every S3 provider). The `Date` header is omitted on query-authenticated
+  requests per the specification.
+- SigV2 canonicalized resources: virtual-hosted bucket roots sign with a trailing
+  slash (`/bucket/?policy`) and `response-*` header-override parameters count as
+  sub-resources, matching the AWS canonicalization examples.
 
 ## [1.1.1] - 2026-02-16
 
