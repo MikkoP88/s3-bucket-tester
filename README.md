@@ -62,6 +62,12 @@ A cross-platform CLI tool built in Go to test S3-compatible storage providers (A
   wildcard-principal policies) produce WARN findings; pass
   `--fail-on-public-read`/`--fail-on-public-write` to treat them as
   failures.
+- **Signing follows the published specifications.** SigV2 query
+  authentication uses HMAC-SHA1 with Base64 encoding and the `Expires`
+  value in the string-to-sign per the S3 REST authentication
+  specification, and the implementation is pinned to AWS-published
+  example vectors; SigV4 signatures are verified against independently
+  re-derived values in the test suite.
 
 ## License
 
@@ -1138,6 +1144,9 @@ This will create:
 ### Running Tests
 
 ```bash
+# Full pre-merge gate: gofmt verification, go vet, tests
+make check
+
 # Run tests
 make test
 
@@ -1154,6 +1163,21 @@ make fmt
 # Run linter (if configured)
 make lint
 ```
+
+### Vulnerability Scanning
+
+```bash
+# Scan for known vulnerabilities reachable from this module
+make vulncheck
+```
+
+### Continuous Integration
+
+Every push and pull request runs the CI pipeline
+(`.github/workflows/ci.yml`): `go vet`, build, and race-detector tests on
+ubuntu, Windows, and macOS, plus golangci-lint and govulncheck jobs. The
+Go toolchain version is pinned by `go.mod` (including the `toolchain`
+directive), so CI and local builds always match.
 
 ### Adding New Providers
 
