@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - golangci-lint (errcheck, staticcheck, govet, unused) runs clean: deferred-close
   error returns are excluded as deliberate, test helpers are exempt from errcheck,
   style-only QF suggestions are disabled, and packages carry doc comments.
+- Cross-platform test reliability: the TLS hostname-mismatch test accepts any
+  x509 verification error (message text differs across Go patch releases), the
+  IPv6 TLS test expects the insecure-TLS WARN verdict, and the bounded-read test
+  treats the server-side broken pipe from an aborted oversized write as expected.
 
 ## [1.2.0] - 2026-11-02
 
