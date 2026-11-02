@@ -481,9 +481,12 @@ func printPolicyResult(result TestResult, config Config) {
 		}
 		fmt.Println()
 
-		// Authenticated users read
+		// Authenticated users access
 		if details.ACL.AuthUsersRead {
 			fmt.Printf("    %s: %s\n", cyan("Auth Users Read"), yellow("Yes"))
+		}
+		if details.ACL.AuthUsersWrite {
+			fmt.Printf("    %s: %s\n", cyan("Auth Users Write"), yellow("Yes"))
 		}
 
 		// Grants

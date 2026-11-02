@@ -674,8 +674,11 @@ func TestCheck_CombinedResults(t *testing.T) {
 	if result.TestName != "Bucket Policy & ACL Check" {
 		t.Errorf("Expected test name 'Bucket Policy & ACL Check', got '%s'", result.TestName)
 	}
-	if result.Status != output.StatusPass {
-		t.Errorf("Expected status PASS, got %s", result.Status)
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected status WARN for public-read policy, got %s", result.Status)
+	}
+	if len(result.Warnings) == 0 {
+		t.Error("Expected a public-read finding in warnings")
 	}
 
 	// Check that details contain both policy and ACL
@@ -689,6 +692,186 @@ func TestCheck_CombinedResults(t *testing.T) {
 	}
 	if details.ACL.Error != "" {
 		t.Errorf("Expected no ACL error, got '%s'", details.ACL.Error)
+	}
+}
+
+// policyTestServer serves a canned policy and ACL pair for verdict tests
+func policyTestServer(t *testing.T, policy map[string]interface{}, grants []output.ACLGrant) string {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.RawQuery, "policy") {
+			if policy == nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(policy)
+			return
+		}
+		if strings.Contains(r.URL.RawQuery, "acl") {
+			acl := AccessControlPolicy{
+				Owner:  OwnerInfo{ID: "owner-id-123", DisplayName: "BucketOwner"},
+				Grants: grants,
+			}
+			w.Header().Set("Content-Type", "application/xml")
+			xml.NewEncoder(w).Encode(acl)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+	return server.URL
+}
+
+func allUsersGrant(permission string) output.ACLGrant {
+	return output.ACLGrant{
+		Grantee: output.ACLGrantee{
+			URI:  "http://acs.amazonaws.com/groups/global/AllUsers",
+			Type: "Group",
+		},
+		Permission: permission,
+	}
+}
+
+func authUsersGrant(permission string) output.ACLGrant {
+	return output.ACLGrant{
+		Grantee: output.ACLGrantee{
+			URI:  "http://acs.amazonaws.com/groups/global/AuthenticatedUsers",
+			Type: "Group",
+		},
+		Permission: permission,
+	}
+}
+
+func verdictTestConfig(endpoint string, mutate func(*output.Config)) output.Config {
+	config := output.Config{
+		Endpoint:  endpoint,
+		Bucket:    "test-bucket",
+		AccessKey: "test-key",
+		SecretKey: "test-secret",
+		Region:    "us-east-1",
+		AuthType:  "sigv4",
+		PathStyle: true,
+	}
+	if mutate != nil {
+		mutate(&config)
+	}
+	return config
+}
+
+// TestCheck_CleanBucketPasses verifies a bucket with no policy and an
+// owner-only ACL still passes
+func TestCheck_CleanBucketPasses(t *testing.T) {
+	url := policyTestServer(t, nil, []output.ACLGrant{{
+		Grantee: output.ACLGrantee{ID: "owner-id-123", DisplayName: "BucketOwner", Type: "CanonicalUser"},
+		Permission: "FULL_CONTROL",
+	}})
+	result := NewPolicyChecker(verdictTestConfig(url, nil)).Check()
+	if result.Status != output.StatusPass {
+		t.Errorf("Expected PASS for clean bucket, got %s (error: %s)", result.Status, result.Error)
+	}
+}
+
+// TestCheck_PublicWriteACL_DefaultWarn verifies a public WRITE grant
+// warns by default instead of passing
+func TestCheck_PublicWriteACL_DefaultWarn(t *testing.T) {
+	url := policyTestServer(t, nil, []output.ACLGrant{allUsersGrant("WRITE")})
+	result := NewPolicyChecker(verdictTestConfig(url, nil)).Check()
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected WARN for public write ACL, got %s", result.Status)
+	}
+}
+
+// TestCheck_PublicWriteACL_Escalated verifies --fail-on-public-write
+// escalates the finding to FAIL
+func TestCheck_PublicWriteACL_Escalated(t *testing.T) {
+	url := policyTestServer(t, nil, []output.ACLGrant{allUsersGrant("WRITE")})
+	result := NewPolicyChecker(verdictTestConfig(url, func(c *output.Config) {
+		c.FailOnPublicWrite = true
+	})).Check()
+	if result.Status != output.StatusFail {
+		t.Errorf("Expected FAIL for escalated public write ACL, got %s", result.Status)
+	}
+	if !strings.Contains(result.Error, "public write access") {
+		t.Errorf("Expected escalation error, got '%s'", result.Error)
+	}
+}
+
+// TestCheck_PublicReadPolicy_Escalated verifies --fail-on-public-read
+// escalates a wildcard read policy to FAIL
+func TestCheck_PublicReadPolicy_Escalated(t *testing.T) {
+	policy := map[string]interface{}{
+		"version": "2012-10-17",
+		"statement": []map[string]interface{}{{
+			"sid":       "PublicRead",
+			"effect":    "Allow",
+			"principal": map[string]interface{}{"AWS": "*"},
+			"action":    "s3:GetObject",
+			"resource":  "arn:aws:s3:::test-bucket/*",
+		}},
+	}
+	url := policyTestServer(t, policy, nil)
+	result := NewPolicyChecker(verdictTestConfig(url, func(c *output.Config) {
+		c.FailOnPublicRead = true
+	})).Check()
+	if result.Status != output.StatusFail {
+		t.Errorf("Expected FAIL for escalated public read policy, got %s", result.Status)
+	}
+}
+
+// TestCheck_FullControlPublicACL verifies FULL_CONTROL to AllUsers sets
+// both public read and public write
+func TestCheck_FullControlPublicACL(t *testing.T) {
+	url := policyTestServer(t, nil, []output.ACLGrant{allUsersGrant("FULL_CONTROL")})
+	result := NewPolicyChecker(verdictTestConfig(url, nil)).Check()
+	details, ok := result.Details.(output.PolicyACLResult)
+	if !ok {
+		t.Fatal("Expected PolicyACLResult details")
+	}
+	if !details.ACL.PublicRead || !details.ACL.PublicWrite {
+		t.Errorf("Expected FULL_CONTROL to set PublicRead and PublicWrite, got %v/%v", details.ACL.PublicRead, details.ACL.PublicWrite)
+	}
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected WARN for FULL_CONTROL public grant, got %s", result.Status)
+	}
+}
+
+// TestCheck_AuthUsersWriteACL verifies WRITE for AuthenticatedUsers is
+// detected (previously missed entirely)
+func TestCheck_AuthUsersWriteACL(t *testing.T) {
+	url := policyTestServer(t, nil, []output.ACLGrant{authUsersGrant("WRITE")})
+	result := NewPolicyChecker(verdictTestConfig(url, nil)).Check()
+	details, ok := result.Details.(output.PolicyACLResult)
+	if !ok {
+		t.Fatal("Expected PolicyACLResult details")
+	}
+	if !details.ACL.AuthUsersWrite {
+		t.Error("Expected AuthUsersWrite to be true for AuthenticatedUsers WRITE grant")
+	}
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected WARN for AuthenticatedUsers WRITE grant, got %s", result.Status)
+	}
+}
+
+// TestCheck_WildcardWritePolicyDefault verifies s3:* allowed to everyone
+// produces both read and write findings and warns by default
+func TestCheck_WildcardWritePolicyDefault(t *testing.T) {
+	policy := map[string]interface{}{
+		"version": "2012-10-17",
+		"statement": []map[string]interface{}{{
+			"effect":    "Allow",
+			"principal": map[string]interface{}{"AWS": "*"},
+			"action":    "s3:*",
+			"resource":  "arn:aws:s3:::test-bucket/*",
+		}},
+	}
+	url := policyTestServer(t, policy, nil)
+	result := NewPolicyChecker(verdictTestConfig(url, nil)).Check()
+	if result.Status != output.StatusWarn {
+		t.Errorf("Expected WARN for wildcard policy, got %s", result.Status)
+	}
+	if len(result.Warnings) < 2 {
+		t.Errorf("Expected read and write findings, got %v", result.Warnings)
 	}
 }
 

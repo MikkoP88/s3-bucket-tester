@@ -458,16 +458,32 @@ func (c *PolicyChecker) Check() output.TestResult {
 
 	c.verbose.LogMessage("Policy & ACL check completed in %v", result.Duration)
 
-	// Determine status based on results
-	if policyResult.Error != "" && aclResult.Error != "" {
+	// Security findings: public or broad-access grants on the bucket
+	readFindings, writeFindings := c.collectFindings(policyResult, aclResult)
+	for _, finding := range append(readFindings, writeFindings...) {
+		result.Warnings = append(result.Warnings, finding)
+	}
+
+	// Determine status: lookup failures and escalated public-access
+	// findings fail; unescalated findings and single lookup errors warn
+	switch {
+	case policyResult.Error != "" && aclResult.Error != "":
 		result.Status = output.StatusFail
 		result.Error = "access denied: " + policyResult.Error + "; " + aclResult.Error
-	} else if policyResult.Error != "" {
+	case len(writeFindings) > 0 && c.Config.FailOnPublicWrite:
+		result.Status = output.StatusFail
+		result.Error = "public write access detected: " + strings.Join(writeFindings, "; ")
+	case len(readFindings) > 0 && c.Config.FailOnPublicRead:
+		result.Status = output.StatusFail
+		result.Error = "public read access detected: " + strings.Join(readFindings, "; ")
+	case policyResult.Error != "":
 		result.Status = output.StatusWarn
 		result.Error = "Policy check failed: " + policyResult.Error
-	} else if aclResult.Error != "" {
+	case aclResult.Error != "":
 		result.Status = output.StatusWarn
 		result.Error = "ACL check failed: " + aclResult.Error
+	case len(readFindings) > 0 || len(writeFindings) > 0:
+		result.Status = output.StatusWarn
 	}
 
 	c.verbose.LogMessage("Check completed with status: %s", result.Status)
@@ -652,17 +668,27 @@ func (c *PolicyChecker) getBucketACL(client *http.Client) (output.ACLResult, err
 		}
 		result.Grants = acl.Grants
 
-		// Check for public access
+		// Check for public and broad access across every grant type;
+		// FULL_CONTROL implies both READ and WRITE
+		const allUsersURI = "http://acs.amazonaws.com/groups/global/AllUsers"
+		const authUsersURI = "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
 		for _, grant := range acl.Grants {
-			if grant.Grantee.URI == "http://acs.amazonaws.com/groups/global/AllUsers" {
-				if grant.Permission == "READ" {
+			read := grant.Permission == "READ" || grant.Permission == "FULL_CONTROL"
+			write := grant.Permission == "WRITE" || grant.Permission == "FULL_CONTROL"
+			switch grant.Grantee.URI {
+			case allUsersURI:
+				if read {
 					result.PublicRead = true
-				} else if grant.Permission == "WRITE" {
+				}
+				if write {
 					result.PublicWrite = true
 				}
-			} else if grant.Grantee.URI == "http://acs.amazonaws.com/groups/global/AuthenticatedUsers" {
-				if grant.Permission == "READ" {
+			case authUsersURI:
+				if read {
 					result.AuthUsersRead = true
+				}
+				if write {
+					result.AuthUsersWrite = true
 				}
 			}
 		}
@@ -680,6 +706,79 @@ func (c *PolicyChecker) getBucketACL(client *http.Client) (output.ACLResult, err
 	}
 
 	return result, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+}
+
+// collectFindings returns security findings from the bucket policy and
+// ACL, split into read exposure and write exposure
+func (c *PolicyChecker) collectFindings(policy output.PolicyResult, acl output.ACLResult) (readFindings, writeFindings []string) {
+	// ACL grants
+	if acl.PublicRead {
+		readFindings = append(readFindings, "ACL grants public READ access to AllUsers")
+	}
+	if acl.PublicWrite {
+		writeFindings = append(writeFindings, "ACL grants public WRITE access to AllUsers")
+	}
+	if acl.AuthUsersRead {
+		readFindings = append(readFindings, "ACL grants READ access to all authenticated users")
+	}
+	if acl.AuthUsersWrite {
+		writeFindings = append(writeFindings, "ACL grants WRITE access to all authenticated users")
+	}
+
+	// Policy statements: Allow + wildcard principal + dangerous actions
+	if policy.PolicyDocument != nil {
+		for _, stmt := range policy.PolicyDocument.Statement {
+			if stmt.Effect != "Allow" || !stmt.Principal.IsWildcard() {
+				continue
+			}
+			for _, action := range c.extractActions(stmt.Action) {
+				if isWriteAction(action) {
+					writeFindings = append(writeFindings, fmt.Sprintf("policy allows %s to everyone (%s)", action, statementLabel(stmt)))
+				}
+				if isReadAction(action) {
+					readFindings = append(readFindings, fmt.Sprintf("policy allows %s to everyone (%s)", action, statementLabel(stmt)))
+				}
+			}
+		}
+	}
+
+	return readFindings, writeFindings
+}
+
+// statementLabel returns a human-readable identifier for a policy statement
+func statementLabel(stmt output.Statement) string {
+	if stmt.Sid != "" {
+		return "Sid " + stmt.Sid
+	}
+	return "unnamed statement"
+}
+
+// isWriteAction reports whether an action can modify bucket contents
+func isWriteAction(action string) bool {
+	a := strings.ToLower(action)
+	if a == "*" || a == "s3:*" {
+		return true
+	}
+	for _, prefix := range []string{"s3:put", "s3:delete", "s3:create", "s3:update", "s3:abort", "s3:restore", "s3:replicate"} {
+		if strings.HasPrefix(a, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isReadAction reports whether an action exposes bucket contents
+func isReadAction(action string) bool {
+	a := strings.ToLower(action)
+	if a == "*" || a == "s3:*" {
+		return true
+	}
+	for _, prefix := range []string{"s3:get", "s3:list"} {
+		if strings.HasPrefix(a, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // extractActions extracts actions from policy statement

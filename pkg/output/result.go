@@ -255,13 +255,14 @@ type Statement struct {
 
 // ACLResult contains bucket ACL check details
 type ACLResult struct {
-	Owner         ACLGrant   `json:"owner"`
-	Grants        []ACLGrant `json:"grants"`
-	PublicRead    bool       `json:"publicRead"`
-	PublicWrite   bool       `json:"publicWrite"`
-	AuthUsersRead bool       `json:"authUsersRead"`
-	Error         string     `json:"error,omitempty"`
-	ResponseBody  string     `json:"responseBody,omitempty"`
+	Owner          ACLGrant   `json:"owner"`
+	Grants         []ACLGrant `json:"grants"`
+	PublicRead     bool       `json:"publicRead"`
+	PublicWrite    bool       `json:"publicWrite"`
+	AuthUsersRead  bool       `json:"authUsersRead"`
+	AuthUsersWrite bool       `json:"authUsersWrite"`
+	Error          string     `json:"error,omitempty"`
+	ResponseBody   string     `json:"responseBody,omitempty"`
 }
 
 // PolicyACLResult contains combined policy and ACL check details
@@ -325,6 +326,8 @@ type Config struct {
 	Verbose         bool   `json:"verbose"`
 	PathStyle       bool   `json:"pathStyle"`
 	CheckPolicy     bool   `json:"checkPolicy"`
+	FailOnPublicWrite bool `json:"failOnPublicWrite"`
+	FailOnPublicRead  bool `json:"failOnPublicRead"`
 	Provider        string `json:"provider"`
 	DetectedProvider string `json:"detectedProvider"`
 
