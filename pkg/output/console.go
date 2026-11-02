@@ -22,8 +22,24 @@ func formatPrincipalEntry(key string, m map[string]interface{}) string {
 	return ""
 }
 
-// formatPrincipal formats a principal value for display
-func formatPrincipal(principal map[string]interface{}) string {
+// formatPrincipal formats a principal value for display, preserving the
+// original document form (including nested structured entries) when present
+func formatPrincipal(principal Principal) string {
+	// Structured object forms render best from the original encoding
+	var m map[string]interface{}
+	if err := json.Unmarshal(principal.raw, &m); err == nil {
+		return formatPrincipalMap(m)
+	}
+
+	values := principal.List()
+	if len(values) == 0 {
+		return "*"
+	}
+	return strings.Join(values, ", ")
+}
+
+// formatPrincipalMap renders a principal object for display
+func formatPrincipalMap(principal map[string]interface{}) string {
 	var parts []string
 
 	for key, value := range principal {
@@ -47,10 +63,13 @@ func formatPrincipal(principal map[string]interface{}) string {
 				continue
 			}
 			for innerKey, innerVal := range v {
-				if m, ok := innerVal.(map[string]interface{}); ok {
-					if s := formatPrincipalEntry(innerKey, m); s != "" {
+				switch iv := innerVal.(type) {
+				case map[string]interface{}:
+					if s := formatPrincipalEntry(innerKey, iv); s != "" {
 						parts = append(parts, s)
 					}
+				case string:
+					parts = append(parts, fmt.Sprintf("%s (%s)", innerKey, iv))
 				}
 			}
 		}

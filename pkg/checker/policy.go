@@ -550,14 +550,8 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 				result.DeniedActions = append(result.DeniedActions, c.extractActions(stmt.Action)...)
 			}
 
-			// Extract principals (string, array, and object-wrapped forms)
-			principals := c.extractPrincipals(stmt.Principal)
-			if len(principals) == 0 {
-				if principal, ok := stmt.Principal["*"].(string); ok {
-					principals = []string{principal}
-				}
-			}
-			result.Principals = append(result.Principals, principals...)
+			// Extract principals (string, object and array forms)
+			result.Principals = append(result.Principals, stmt.Principal.List()...)
 
 			// Extract resources
 			result.Resources = append(result.Resources, c.extractResources(stmt.Resource)...)
@@ -704,26 +698,6 @@ func (c *PolicyChecker) extractActions(action interface{}) []string {
 		}
 	}
 	return actions
-}
-
-// extractPrincipals extracts principals from policy statement
-func (c *PolicyChecker) extractPrincipals(principal map[string]interface{}) []string {
-	var principals []string
-	if aws, ok := principal["AWS"]; ok {
-		switch v := aws.(type) {
-		case string:
-			principals = append(principals, v)
-		case []string:
-			principals = append(principals, v...)
-		case []interface{}:
-			for _, p := range v {
-				if str, ok := p.(string); ok {
-					principals = append(principals, str)
-				}
-			}
-		}
-	}
-	return principals
 }
 
 // extractResources extracts resources from policy statement

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -104,41 +105,30 @@ func TestPrintJSON(t *testing.T) {
 	}
 }
 
-// TestFormatPrincipal tests principal formatting
+// TestFormatPrincipal tests principal formatting across every accepted
+// principal encoding, decoded from real JSON
 func TestFormatPrincipal(t *testing.T) {
 	tests := []struct {
-		principal map[string]interface{}
-		expected  string
+		name     string
+		json     string
+		expected string
 	}{
-		{
-			principal: map[string]interface{}{"AWS": "*"},
-			expected:  "*",
-		},
-		{
-			principal: map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/Admin"},
-			expected:  "arn:aws:iam::123456789012:user/Admin",
-		},
-		{
-			principal: map[string]interface{}{"AWS": []string{"*"}},
-			expected:  "*",
-		},
-		{
-			principal: map[string]interface{}{"AWS": map[string]interface{}{"CanonicalUser": map[string]interface{}{"ID": "123", "DisplayName": "admin@example.com"}}},
-			expected:  "CanonicalUser (123)",
-		},
-		{
-			principal: map[string]interface{}{"Group": map[string]interface{}{"URI": "http://acs.amazonaws.com/groups/global/AllUsers"}},
-			expected:  "Group (http://acs.amazonaws.com/groups/global/AllUsers)",
-		},
-		{
-			principal: map[string]interface{}{},
-			expected:  "*",
-		},
+		{"wildcard string", `"*"`, "*"},
+		{"object wildcard", `{"AWS": "*"}`, "*"},
+		{"array wildcard", `{"AWS": ["*"]}`, "*"},
+		{"object single", `{"AWS": "arn:aws:iam::123456789012:user/Admin"}`, "arn:aws:iam::123456789012:user/Admin"},
+		{"array values", `{"AWS": ["arn:1", "arn:2"]}`, "arn:1, arn:2"},
+		{"canonical user", `{"AWS": {"CanonicalUser": {"ID": "123", "DisplayName": "admin@example.com"}}}`, "CanonicalUser (123)"},
+		{"group uri", `{"Group": {"URI": "http://acs.amazonaws.com/groups/global/AllUsers"}}`, "Group (http://acs.amazonaws.com/groups/global/AllUsers)"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			result := formatPrincipal(tt.principal)
+		t.Run(tt.name, func(t *testing.T) {
+			var principal Principal
+			if err := json.Unmarshal([]byte(tt.json), &principal); err != nil {
+				t.Fatalf("failed to unmarshal %s: %v", tt.json, err)
+			}
+			result := formatPrincipal(principal)
 			if result != tt.expected {
 				t.Errorf("Expected '%s', got '%s'", tt.expected, result)
 			}

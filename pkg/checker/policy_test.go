@@ -73,18 +73,17 @@ func TestGetBucketPolicy_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check for policy endpoint
 		if strings.Contains(r.URL.Path, "test-bucket") && strings.Contains(r.URL.RawQuery, "policy") {
-			policy := output.BucketPolicy{
-				Version: "2012-10-17",
-				ID:      "TestPolicy",
-				Statement: []output.Statement{
+			// Encoded as a raw document so the Principal crosses real JSON
+			policy := map[string]interface{}{
+				"version": "2012-10-17",
+				"id":      "TestPolicy",
+				"statement": []map[string]interface{}{
 					{
-						Sid:    "PublicRead",
-						Effect: "Allow",
-						Principal: map[string]interface{}{
-							"AWS": "*",
-						},
-						Action:   []string{"s3:GetObject"},
-						Resource: []string{"arn:aws:s3:::test-bucket/*"},
+						"sid":       "PublicRead",
+						"effect":    "Allow",
+						"principal": map[string]interface{}{"AWS": "*"},
+						"action":    []string{"s3:GetObject"},
+						"resource":  []string{"arn:aws:s3:::test-bucket/*"},
 					},
 				},
 			}
@@ -213,26 +212,22 @@ func TestGetBucketPolicy_MultipleStatements(t *testing.T) {
 	// Create a mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.RawQuery, "policy") {
-			policy := output.BucketPolicy{
-				Version: "2012-10-17",
-				Statement: []output.Statement{
+			policy := map[string]interface{}{
+				"version": "2012-10-17",
+				"statement": []map[string]interface{}{
 					{
-						Sid:    "AllowRead",
-						Effect: "Allow",
-						Principal: map[string]interface{}{
-							"AWS": "arn:aws:iam::123456789012:user/test-user",
-						},
-						Action:   []string{"s3:GetObject", "s3:ListBucket"},
-						Resource: []string{"arn:aws:s3:::test-bucket/*"},
+						"sid":       "AllowRead",
+						"effect":    "Allow",
+						"principal": map[string]interface{}{"AWS": "arn:aws:iam::123456789012:user/test-user"},
+						"action":    []string{"s3:GetObject", "s3:ListBucket"},
+						"resource":  []string{"arn:aws:s3:::test-bucket/*"},
 					},
 					{
-						Sid:    "DenyDelete",
-						Effect: "Deny",
-						Principal: map[string]interface{}{
-							"AWS": "*",
-						},
-						Action:   "s3:DeleteObject",
-						Resource: "arn:aws:s3:::test-bucket/*",
+						"sid":       "DenyDelete",
+						"effect":    "Deny",
+						"principal": map[string]interface{}{"AWS": "*"},
+						"action":    "s3:DeleteObject",
+						"resource":  "arn:aws:s3:::test-bucket/*",
 					},
 				},
 			}
@@ -537,37 +532,6 @@ func TestExtractActions(t *testing.T) {
 	}
 }
 
-// TestExtractPrincipals tests the extractPrincipals helper function
-func TestExtractPrincipals(t *testing.T) {
-	config := output.Config{
-		Endpoint:  "https://s3.example.com",
-		Bucket:    "test-bucket",
-		AccessKey: "test-key",
-		SecretKey: "test-secret",
-		Region:    "us-east-1",
-		AuthType:  "sigv4",
-	}
-	checker := NewPolicyChecker(config)
-
-	// Test with string
-	principal := map[string]interface{}{
-		"AWS": "*",
-	}
-	principals := checker.extractPrincipals(principal)
-	if len(principals) != 1 || principals[0] != "*" {
-		t.Errorf("Expected ['*'], got %v", principals)
-	}
-
-	// Test with []string
-	principal = map[string]interface{}{
-		"AWS": []string{"arn:aws:iam::123456789012:user/user1", "arn:aws:iam::123456789012:user/user2"},
-	}
-	principals = checker.extractPrincipals(principal)
-	if len(principals) != 2 {
-		t.Errorf("Expected 2 principals, got %d", len(principals))
-	}
-}
-
 // TestExtractResources tests the extractResources helper function
 func TestExtractResources(t *testing.T) {
 	config := output.Config{
@@ -653,17 +617,15 @@ func TestCheck_CombinedResults(t *testing.T) {
 	// Create a mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.RawQuery, "policy") {
-			policy := output.BucketPolicy{
-				Version: "2012-10-17",
-				Statement: []output.Statement{
+			policy := map[string]interface{}{
+				"version": "2012-10-17",
+				"statement": []map[string]interface{}{
 					{
-						Sid:    "AllowRead",
-						Effect: "Allow",
-						Principal: map[string]interface{}{
-							"AWS": "*",
-						},
-						Action:   []string{"s3:GetObject"},
-						Resource: []string{"arn:aws:s3:::test-bucket/*"},
+						"sid":       "AllowRead",
+						"effect":    "Allow",
+						"principal": map[string]interface{}{"AWS": "*"},
+						"action":    "s3:GetObject",
+						"resource":  []string{"arn:aws:s3:::test-bucket/*"},
 					},
 				},
 			}
