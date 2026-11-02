@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -745,10 +746,21 @@ func (c *PolicyChecker) extractResources(resource interface{}) []string {
 
 // buildBucketURL builds the bucket URL
 func (c *PolicyChecker) buildBucketURL(query string) (string, error) {
-	if c.PathStyle {
-		return fmt.Sprintf("%s/%s%s", c.Endpoint, c.Bucket, query), nil
+	u, err := url.Parse(c.Endpoint)
+	if err != nil {
+		return "", fmt.Errorf("invalid endpoint: %w", err)
 	}
-	return fmt.Sprintf("https://%s.%s%s", c.Bucket, strings.TrimPrefix(c.Endpoint, "https://"), query), nil
+
+	if c.PathStyle {
+		// Bucket is appended after any endpoint path prefix (e.g. reverse
+		// proxies serving under /s3)
+		u.Path = path.Join("/", u.Path, c.Bucket)
+	} else {
+		u.Host = c.Bucket + "." + cleanHost(u.Host, u.Scheme)
+	}
+
+	u.RawQuery = strings.TrimPrefix(query, "?")
+	return u.String(), nil
 }
 
 // addSigV4Auth adds SigV4 authentication to the request
