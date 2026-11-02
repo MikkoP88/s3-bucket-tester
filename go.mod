@@ -2,6 +2,8 @@ module github.com/s3-bucket-tester/s3tester
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/fatih/color v1.16.0
 	golang.org/x/term v0.47.0
