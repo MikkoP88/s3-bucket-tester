@@ -3,7 +3,7 @@
 
 # Binary name
 BINARY_NAME=s3tester
-VERSION=1.1.1
+VERSION=1.2.0
 
 # Build directory
 BUILD_DIR=build
@@ -13,19 +13,21 @@ GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
+# Package path of the version variable shown by --version
+VERSION_PKG=github.com/s3-bucket-tester/s3tester/pkg/config
+
 # Build flags
-LDFLAGS=-ldflags="-s -w -X main.version=$(VERSION)"
+LDFLAGS=-ldflags="-s -w -X $(VERSION_PKG).version=$(VERSION)"
 
 # Main package path
 MAIN_PATH=./cmd/s3tester
 
-.PHONY: all build clean test deps help
+.PHONY: all build build-all build-windows build-linux build-static check clean test test-coverage vulncheck release deps fmt lint install help
 
-# Default target
-all: clean build
+# Default target: verify everything, then build
+all: check build
 
 # Build for current platform
 build:
@@ -70,6 +72,27 @@ build-static:
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-static $(MAIN_PATH)
 	@echo "Static build complete: $(BUILD_DIR)/$(BINARY_NAME)-static"
+
+# Pre-merge gate: formatting, vet, and a full test run
+check:
+	@echo "Verifying formatting..."
+	@unformatted=$$(gofmt -l ./pkg ./cmd); if [ -n "$$unformatted" ]; then echo "Files need gofmt: $$unformatted"; exit 1; fi
+	@echo "Running go vet..."
+	$(GOCMD) vet ./...
+	@echo "Running tests..."
+	$(GOTEST) -count=1 ./...
+	@echo "All checks passed!"
+
+# Scan for known vulnerabilities reachable from this module
+vulncheck:
+	@echo "Running govulncheck..."
+	$(GOCMD) run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+# Release artifacts: all-platform binaries plus SHA-256 checksums
+release: build-all
+	@echo "Generating checksums..."
+	cd $(BUILD_DIR) && sha256sum $(BINARY_NAME)-* > checksums.txt
+	@echo "Checksums written to $(BUILD_DIR)/checksums.txt"
 
 # Clean build artifacts
 clean:
@@ -117,12 +140,15 @@ help:
 	@echo "S3 Bucket Tester - Build System"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make              - Build for current platform"
-	@echo "  make all          - Clean and build for current platform"
+	@echo "  make              - Verify (check) and build for current platform"
+	@echo "  make check        - gofmt verification, go vet, tests"
+	@echo "  make build        - Build for current platform"
 	@echo "  make build-all    - Build for all platforms (Windows, Linux, macOS)"
 	@echo "  make build-windows- Build for Windows only"
 	@echo "  make build-linux  - Build for Linux only"
 	@echo "  make build-static - Build static binary (no CGO)"
+	@echo "  make release      - Build all platforms and generate checksums"
+	@echo "  make vulncheck    - Run govulncheck"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make test         - Run tests"
 	@echo "  make test-coverage- Run tests with coverage"

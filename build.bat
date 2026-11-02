@@ -5,10 +5,10 @@ REM This script builds s3tester binary for all platforms
 setlocal enabledelayedexpansion
 
 set BINARY_NAME=s3tester
-set VERSION=1.1.1
+set VERSION=1.2.0
 set BUILD_DIR=build
 set MAIN_PATH=./cmd/s3tester
-set LDFLAGS="-ldflags=-s -w -X main.version=%VERSION% -X github.com/s3-bucket-tester/s3tester/pkg/config.version=%VERSION%"
+set LDFLAGS="-ldflags=-s -w -X github.com/s3-bucket-tester/s3tester/pkg/config.version=%VERSION%"
 
 echo S3 Bucket Tester - Build Script for All Platforms
 echo.
