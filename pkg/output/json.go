@@ -6,6 +6,23 @@ import (
 	"time"
 )
 
+// writeReportFile writes report data with owner-only permissions. The extra
+// Chmod also tightens report files that already exist with looser modes.
+func writeReportFile(outputFile string, data []byte) error {
+	f, err := os.OpenFile(outputFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Chmod(outputFile, 0600)
+}
+
 // PrintJSON prints the test report as JSON to a file
 func PrintJSON(report *TestReport, outputFile string) error {
 	// Marshal to JSON with indentation
@@ -16,7 +33,7 @@ func PrintJSON(report *TestReport, outputFile string) error {
 
 	// Write to file if specified
 	if outputFile != "" {
-		return os.WriteFile(outputFile, data, 0644)
+		return writeReportFile(outputFile, data)
 	}
 
 	// Otherwise print to stdout
@@ -28,22 +45,22 @@ func PrintJSON(report *TestReport, outputFile string) error {
 func PrintJSONWithRemediation(report *TestReport, outputFile string) error {
 	// Create extended report with remediations
 	type ExtendedTestResult struct {
-		TestName      string        `json:"testName"`
-		Status        Status        `json:"status"`
-		Duration      string        `json:"duration"`
-		Error         string        `json:"error,omitempty"`
-		Details       interface{}   `json:"details,omitempty"`
-		Remediation   interface{}   `json:"remediation,omitempty"`
-		Warnings      []string      `json:"warnings,omitempty"`
+		TestName    string      `json:"testName"`
+		Status      Status      `json:"status"`
+		Duration    string      `json:"duration"`
+		Error       string      `json:"error,omitempty"`
+		Details     interface{} `json:"details,omitempty"`
+		Remediation interface{} `json:"remediation,omitempty"`
+		Warnings    []string    `json:"warnings,omitempty"`
 	}
 
 	type ExtendedTestReport struct {
-		Config     Config                `json:"config"`
-		StartTime  string                `json:"startTime"`
-		EndTime    string                `json:"endTime"`
-		Duration   string                `json:"duration"`
-		Results    []ExtendedTestResult  `json:"results"`
-		Summary    TestSummary           `json:"summary"`
+		Config    Config               `json:"config"`
+		StartTime string               `json:"startTime"`
+		EndTime   string               `json:"endTime"`
+		Duration  string               `json:"duration"`
+		Results   []ExtendedTestResult `json:"results"`
+		Summary   TestSummary          `json:"summary"`
 	}
 
 	// Convert results
@@ -60,12 +77,12 @@ func PrintJSONWithRemediation(report *TestReport, outputFile string) error {
 
 	// Create extended report
 	extendedReport := ExtendedTestReport{
-		Config:     report.Config,
-		StartTime:  report.StartTime.Format(time.RFC3339),
-		EndTime:    report.EndTime.Format(time.RFC3339),
-		Duration:   report.Duration.String(),
-		Results:    extendedResults,
-		Summary:    report.Summary,
+		Config:    report.Config,
+		StartTime: report.StartTime.Format(time.RFC3339),
+		EndTime:   report.EndTime.Format(time.RFC3339),
+		Duration:  report.Duration.String(),
+		Results:   extendedResults,
+		Summary:   report.Summary,
 	}
 
 	// Marshal to JSON with indentation
@@ -75,5 +92,5 @@ func PrintJSONWithRemediation(report *TestReport, outputFile string) error {
 	}
 
 	// Write to file
-	return os.WriteFile(outputFile, data, 0644)
+	return writeReportFile(outputFile, data)
 }

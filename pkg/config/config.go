@@ -518,6 +518,7 @@ func (c *Config) ToOutputConfig() output.Config {
 		Region:               c.Region,
 		AccessKey:            c.AccessKey,
 		SecretKey:            c.SecretKey,
+		AccessKeyMasked:      output.MaskAccessKey(c.AccessKey),
 		AuthType:             c.AuthType,
 		Port:                 c.Port,
 		Insecure:             c.Insecure,
