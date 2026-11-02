@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -29,6 +30,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(ExitCodeConfig)
 	}
+
+	// Fill in credentials missing after flag parsing: environment variables
+	// first, then a hidden terminal prompt (interactive runs only)
+	cfg.ResolveCredentials()
 
 	// Validate configuration
 	if cfg.Verbose {
@@ -167,7 +172,7 @@ func printRemediations(results []output.TestResult) {
 
 	for _, result := range results {
 		if result.Status == output.StatusFail && result.Error != "" {
-			rem := remediation.GetRemediation(result.TestName, fmt.Errorf(result.Error))
+			rem := remediation.GetRemediation(result.TestName, errors.New(result.Error))
 			if rem != nil {
 				fmt.Printf("%s:\n", bold(result.TestName))
 				fmt.Println(remediation.FormatRemediation(rem))
