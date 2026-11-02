@@ -44,8 +44,8 @@ func (c *TLSChecker) Check() output.TestResult {
 		Duration: time.Since(startTime),
 	}
 
-	// Create address
-	address := fmt.Sprintf("%s:%d", c.Host, c.Port)
+	// Create address (JoinHostPort handles IPv6 bracketing)
+	address := net.JoinHostPort(c.Host, fmt.Sprintf("%d", c.Port))
 
 	c.verbose.LogMessage("Attempting TLS connection to: %s", address)
 	c.verbose.LogMessage("Server name: %s", c.Host)
@@ -103,6 +103,21 @@ func (c *TLSChecker) Check() output.TestResult {
 
 	c.verbose.LogMessage("Number of certificates: %d", len(peerCerts))
 
+	// A TLS handshake without a peer certificate leaves nothing to report
+	if len(peerCerts) == 0 {
+		result.Status = output.StatusFail
+		result.Error = "server presented no certificate"
+		result.Details = output.TLSResult{
+			Host:        c.Host,
+			Port:        c.Port,
+			Verified:    false,
+			TLSVersion:  tlsVersionToString(state.Version),
+			CipherSuite: tls.CipherSuiteName(state.CipherSuite),
+		}
+		result.Duration = time.Since(startTime)
+		return result
+	}
+
 	// Create TLS result
 	tlsResult := output.TLSResult{
 		Host:        c.Host,
@@ -143,14 +158,16 @@ func (c *TLSChecker) Check() output.TestResult {
 func (c *TLSChecker) tryGetCertificateInfo(address string, result *output.TestResult) error {
 	c.verbose.LogMessage("Attempting to retrieve certificate info with insecure connection...")
 
-	// Try with a more permissive config
+	// Try with a more permissive config, still bounded by the check timeout
+	// and a TLS 1.2 floor (no deprecated-protocol fallback)
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 		ServerName:         c.Host,
-		MinVersion:         tls.VersionTLS10,
+		MinVersion:         tls.VersionTLS12,
 	}
 
-	conn, err := tls.Dial("tcp", address, tlsConfig)
+	timeout := time.Duration(c.Config.Timeout) * time.Second
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: timeout}, "tcp", address, tlsConfig)
 	if err != nil {
 		return err
 	}

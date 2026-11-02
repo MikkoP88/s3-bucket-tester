@@ -30,7 +30,7 @@ A cross-platform CLI tool built in Go to test S3-compatible storage providers (A
 - **Multi-provider support**: AWS S3, MinIO, NetApp StorageGrid, Hetzner S3, and any S3-compatible storage
 - **Dual authentication**: Supports AWS SigV4 (default) and SigV2
 - **Addressing styles**: Both path-style and virtual-hosted addressing
-- **Redirect handling**: Follows HTTP redirects with configurable limits
+- **Redirect handling**: Redirects are not followed by default; when enabled with `--follow-redirects`, targets must stay on HTTPS and on the original host or its subdomains
 - **DNS & IP support**: Works with both hostnames and IP addresses
 - **Verbose logging**: Detailed debugging information
 - **JSON output**: Optional machine-readable output format
@@ -50,6 +50,9 @@ A cross-platform CLI tool built in Go to test S3-compatible storage providers (A
 - **Verbose logs are redacted.** `--verbose` masks `Authorization` headers to
   the signing algorithm plus a masked credential identifier, and redacts
   SigV2/SigV4 authentication parameters from logged URLs.
+- **Redirects are off by default.** Signed requests are never silently
+  redirected; opting in with `--follow-redirects` restricts targets to HTTPS
+  on the original host or its subdomains.
 
 ## License
 
@@ -396,8 +399,8 @@ s3tester --endpoint aws --bucket my-test-bucket
 | `--insecure` | Skip TLS verification | `false` |
 | `--timeout` | Request timeout in seconds | `30` |
 | `--output-file` | Save JSON output to file | - |
-| `--follow-redirects` | Follow HTTP redirects | `true` |
-| `--no-redirects` | Do not follow HTTP redirects | - |
+| `--follow-redirects` | Follow HTTP redirects (HTTPS and same-host targets only) | `false` |
+| `--no-redirects` | Do not follow HTTP redirects (default) | Default |
 | `--max-redirects` | Maximum redirects to follow | `10` |
 | `--verbose` | Enable verbose output | `false` |
 | `--check-policy` | Enable bucket policy and ACL check (requires s3:GetBucketPolicy and s3:GetBucketAcl permissions) | `false` |

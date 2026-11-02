@@ -2,7 +2,6 @@ package checker
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -10,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -119,11 +119,11 @@ func (v *VerboseLogger) LogResponse(resp *http.Response) {
 	fmt.Println("HTTP RESPONSE")
 	fmt.Println(strings.Repeat("=", 70))
 
-	// Read and store body for logging
+	// Read and store body for logging (bounded for display)
 	var bodyBytes []byte
 	if resp.Body != nil {
 		var err error
-		bodyBytes, err = io.ReadAll(resp.Body)
+		bodyBytes, err = io.ReadAll(io.LimitReader(resp.Body, maxPolicyBodySize))
 		if err != nil {
 			fmt.Printf("Error reading response body: %v\n", err)
 		}
@@ -424,25 +424,8 @@ func (c *PolicyChecker) Check() output.TestResult {
 		Duration: time.Since(startTime),
 	}
 
-	// Create HTTP client with custom transport for insecure TLS
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: c.Config.Insecure,
-		},
-	}
-	client := &http.Client{
-		Timeout:   time.Duration(c.Config.Timeout) * time.Second,
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if !c.Config.FollowRedirect {
-				return http.ErrUseLastResponse
-			}
-			if len(via) >= c.Config.MaxRedirects {
-				return fmt.Errorf("stopped after %d redirects", c.Config.MaxRedirects)
-			}
-			return nil
-		},
-	}
+	// Create HTTP client with shared transport and redirect policy
+	client := newSecureHTTPClient(c.Config)
 
 	// Get bucket policy
 	policyStartTime := time.Now()
@@ -539,7 +522,7 @@ func (c *PolicyChecker) getBucketPolicy(client *http.Client) (output.PolicyResul
 	c.verbose.LogResponse(resp)
 
 	// Read response body
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readLimited(resp.Body, maxPolicyBodySize)
 	if err != nil {
 		return result, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -650,7 +633,7 @@ func (c *PolicyChecker) getBucketACL(client *http.Client) (output.ACLResult, err
 	c.verbose.LogResponse(resp)
 
 	// Read response body
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readLimited(resp.Body, maxPolicyBodySize)
 	if err != nil {
 		return result, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -763,10 +746,21 @@ func (c *PolicyChecker) extractResources(resource interface{}) []string {
 
 // buildBucketURL builds the bucket URL
 func (c *PolicyChecker) buildBucketURL(query string) (string, error) {
-	if c.PathStyle {
-		return fmt.Sprintf("%s/%s%s", c.Endpoint, c.Bucket, query), nil
+	u, err := url.Parse(c.Endpoint)
+	if err != nil {
+		return "", fmt.Errorf("invalid endpoint: %w", err)
 	}
-	return fmt.Sprintf("https://%s.%s%s", c.Bucket, strings.TrimPrefix(c.Endpoint, "https://"), query), nil
+
+	if c.PathStyle {
+		// Bucket is appended after any endpoint path prefix (e.g. reverse
+		// proxies serving under /s3)
+		u.Path = path.Join("/", u.Path, c.Bucket)
+	} else {
+		u.Host = c.Bucket + "." + cleanHost(u.Host, u.Scheme)
+	}
+
+	u.RawQuery = strings.TrimPrefix(query, "?")
+	return u.String(), nil
 }
 
 // addSigV4Auth adds SigV4 authentication to the request

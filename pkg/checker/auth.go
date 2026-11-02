@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -67,25 +65,8 @@ func (c *AuthChecker) Check() output.TestResult {
 		Duration: time.Since(startTime),
 	}
 
-	// Create HTTP client with custom transport for insecure TLS
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: c.Config.Insecure,
-		},
-	}
-	client := &http.Client{
-		Timeout:   time.Duration(c.Config.Timeout) * time.Second,
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if !c.Config.FollowRedirect {
-				return http.ErrUseLastResponse
-			}
-			if len(via) >= c.Config.MaxRedirects {
-				return fmt.Errorf("stopped after %d redirects", c.Config.MaxRedirects)
-			}
-			return nil
-		},
-	}
+	// Create HTTP client with shared transport and redirect policy
+	client := newSecureHTTPClient(c.Config)
 
 	// Create request
 	req, err := c.createRequest()
@@ -145,8 +126,12 @@ func (c *AuthChecker) Check() output.TestResult {
 	// Log the response
 	c.verbose.LogResponse(resp)
 
-	// Read response body
-	body, _ := io.ReadAll(resp.Body)
+	// Read response body (bounded; oversized bodies are treated as empty)
+	body, readErr := readLimited(resp.Body, maxAuthBodySize)
+	if readErr != nil {
+		c.verbose.LogMessage("Failed to read response body: %v", readErr)
+		body = nil
+	}
 
 	// Log response body if present and verbose
 	if c.verbose != nil && c.verbose.enabled && len(body) > 0 {

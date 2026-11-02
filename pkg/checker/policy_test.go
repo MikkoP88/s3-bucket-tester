@@ -623,6 +623,29 @@ func TestBuildBucketURL(t *testing.T) {
 	if !strings.Contains(url, "s3.example.com/test-bucket") {
 		t.Errorf("Expected path-style URL, got '%s'", url)
 	}
+
+	// Test virtual-hosted with an http endpoint and port: the endpoint
+	// scheme must be preserved (regression: previously hardcoded https)
+	checker.PathStyle = false
+	checker.Endpoint = "http://minio.local:9000"
+	url, err = checker.buildBucketURL("?acl")
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if url != "http://test-bucket.minio.local:9000?acl" {
+		t.Errorf("Expected http URL with port preserved, got '%s'", url)
+	}
+
+	// Test path-style preserves an endpoint path prefix
+	checker.PathStyle = true
+	checker.Endpoint = "https://proxy.example.com/s3"
+	url, err = checker.buildBucketURL("?acl")
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if url != "https://proxy.example.com/s3/test-bucket?acl" {
+		t.Errorf("Expected endpoint path preserved, got '%s'", url)
+	}
 }
 
 // TestCheck_CombinedResults tests the Check method with combined policy and ACL results

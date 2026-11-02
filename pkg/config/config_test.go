@@ -24,7 +24,7 @@ func TestGetDefaultConfig(t *testing.T) {
 		{"Timeout", "Timeout", 30},
 		{"OutputFormat", "OutputFormat", ""},
 		{"OutputFile", "OutputFile", ""},
-		{"FollowRedirect", "FollowRedirect", true},
+		{"FollowRedirect", "FollowRedirect", false},
 		{"MaxRedirects", "MaxRedirects", 10},
 		{"Verbose", "Verbose", false},
 		{"Provider", "Provider", ""},

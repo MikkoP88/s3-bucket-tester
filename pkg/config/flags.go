@@ -169,8 +169,10 @@ OPTIONAL FLAGS:
     --insecure             Skip TLS certificate verification (not recommended)
     --timeout <seconds>    Request timeout in seconds (default: 30)
     --output-file <file>   Save JSON output to file
-    --follow-redirects     Follow HTTP redirects (default: true)
-    --no-redirects         Do not follow HTTP redirects
+    --follow-redirects     Follow HTTP redirects (default: off). When enabled,
+                           redirects must stay on HTTPS and on the original
+                           host or its subdomains.
+    --no-redirects         Do not follow HTTP redirects (default)
     --max-redirects <n>    Maximum redirects to follow (default: 10)
     --verbose              Enable verbose output
     --check-policy         Enable bucket policy and ACL check
